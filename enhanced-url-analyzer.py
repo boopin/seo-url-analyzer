@@ -5,7 +5,39 @@ Created: January 2024
 Description: Advanced URL analysis tool with enhanced SEO analysis capabilities
 """
 
-[Previous imports remain the same...]
+import streamlit as st
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+from urllib.parse import urlparse, urljoin
+import io
+import re
+import time
+import ssl
+import socket
+import json
+from concurrent.futures import ThreadPoolExecutor
+from readability import Document
+import textstat
+from PIL import Image
+from io import BytesIO
+import matplotlib.pyplot as plt
+import seaborn as sns
+from collections import Counter
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from string import punctuation
+
+# Download required NLTK data
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords')
 
 def get_load_time(url):
     """Measure page load time"""
