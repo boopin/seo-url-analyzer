@@ -195,10 +195,36 @@ def main():
                 'text-align': 'center'
             }))
 
-            # Export options
-            st.subheader("Export Results")
+            # Export main table
+            st.subheader("Export Main Results")
             csv = display_df.to_csv(index=False).encode('utf-8')
             st.download_button("Download CSV", csv, "seo_analysis.csv", "text/csv")
+
+            # Separate export for keywords and anchors
+            keywords_data = pd.DataFrame([
+                {
+                    'url': result['url'],
+                    'keywords': ', '.join([f"{k} ({v})" for k, v in result['keywords'].items()])
+                } for result in results
+            ])
+
+            anchors_data = pd.DataFrame([
+                {
+                    'url': result['url'],
+                    'anchors': ', '.join(result['anchors'])
+                } for result in results
+            ])
+
+            st.subheader("Export Keywords and Anchors")
+            st.write("**Keywords:**")
+            st.dataframe(keywords_data)
+            keywords_csv = keywords_data.to_csv(index=False).encode('utf-8')
+            st.download_button("Download Keywords CSV", keywords_csv, "keywords_analysis.csv", "text/csv")
+
+            st.write("**Anchors:**")
+            st.dataframe(anchors_data)
+            anchors_csv = anchors_data.to_csv(index=False).encode('utf-8')
+            st.download_button("Download Anchors CSV", anchors_csv, "anchors_analysis.csv", "text/csv")
 
 if __name__ == "__main__":
     main()
