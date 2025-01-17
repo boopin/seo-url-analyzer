@@ -1,9 +1,8 @@
 """
 Enhanced URL Content Analyzer
-Version: 2.0
+Version: 2.1
 Created: January 2024
-Description: Advanced URL analysis tool with enhanced content analysis, SEO metrics, 
-            and improved UI/UX features.
+Description: Advanced URL analysis tool with enhanced SEO analysis capabilities
 """
 
 import streamlit as st
@@ -24,101 +23,88 @@ from PIL import Image
 from io import BytesIO
 import matplotlib.pyplot as plt
 import seaborn as sns
+from collections import Counter
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from string import punctuation
 
-def analyze_url(url):
-    """Basic URL content analysis"""
-    try:
-        response = requests.get(url, timeout=10)
-        soup = BeautifulSoup(response.text, 'html.parser')
+# Download required NLTK data
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords')
+
+def extract_meta_tags(soup):
+    """Extract meta tags from the page"""
+    meta_tags = {}
+    
+    # Extract title
+    meta_tags['title'] = soup.title.text.strip() if soup.title else ''
+    
+    # Extract meta description
+    meta_description = soup.find('meta', attrs={'name': 'description'})
+    meta_tags['description'] = meta_description['content'].strip() if meta_description else ''
+    
+    # Extract other important meta tags
+    for meta in soup.find_all('meta'):
+        name = meta.get('name', '').lower()
+        property = meta.get('property', '').lower()
+        content = meta.get('content', '').strip()
         
-        # Extract text content
-        text_content = ' '.join([p.text for p in soup.find_all('p')])
-        
-        return {
-            'url': url,
-            'status': 'Success',
-            'word_count': len(text_content.split()),
-            'title': soup.title.text if soup.title else '',
-            'meta_description': soup.find('meta', attrs={'name': 'description'})['content'] if soup.find('meta', attrs={'name': 'description'}) else ''
-        }
-    except Exception as e:
-        return {
-            'url': url,
-            'status': f'Error: {str(e)}',
-            'word_count': 0,
-            'title': '',
-            'meta_description': ''
-        }
+        if name and content:
+            meta_tags[f'meta_{name}'] = content
+        elif property and content:
+            meta_tags[f'meta_{property}'] = content
+    
+    return meta_tags
 
-def check_ssl(url):
-    """Check SSL certificate status"""
-    try:
-        hostname = urlparse(url).hostname
-        context = ssl.create_default_context()
-        with socket.create_connection((hostname, 443)) as sock:
-            with context.wrap_socket(sock, server_hostname=hostname) as ssock:
-                cert = ssock.getpeercert()
-                return True, cert['notAfter']
-    except:
-        return False, None
+def extract_headings(soup):
+    """Extract all headings (H1-H6) from the page"""
+    headings = {}
+    for i in range(1, 7):
+        heading_tag = f'h{i}'
+        headings_list = [h.text.strip() for h in soup.find_all(heading_tag)]
+        headings[heading_tag] = headings_list
+        headings[f'{heading_tag}_count'] = len(headings_list)
+    return headings
 
-def get_load_time(url):
-    """Measure page load time"""
-    try:
-        start_time = time.time()
-        response = requests.get(url)
-        end_time = time.time()
-        return round((end_time - start_time) * 1000)  # Convert to milliseconds
-    except:
-        return None
+def extract_keywords(text, num_keywords=20):
+    """Extract commonly used keywords from the text"""
+    # Tokenize and convert to lowercase
+    tokens = word_tokenize(text.lower())
+    
+    # Remove stopwords and punctuation
+    stop_words = set(stopwords.words('english'))
+    tokens = [word for word in tokens if word not in stop_words and word not in punctuation and len(word) > 2]
+    
+    # Count word frequencies
+    word_freq = Counter(tokens)
+    
+    # Get the most common words
+    return dict(word_freq.most_common(num_keywords))
 
-def analyze_images(soup, base_url):
-    """Analyze images on the page"""
-    try:
-        images = soup.find_all('img')
-        return {
-            'total_count': len(images),
-            'missing_alt': len([img for img in images if not img.get('alt')])
-        }
-    except:
-        return {'total_count': 0, 'missing_alt': 0}
-
-def analyze_links(soup, base_url):
-    """Analyze links on the page"""
-    try:
-        links = soup.find_all('a', href=True)
-        domain = urlparse(base_url).netloc
-        
-        internal_links = []
-        external_links = []
-        
-        for link in links:
-            href = link['href']
+def extract_anchors(soup, base_url):
+    """Extract and analyze anchor texts and their targets"""
+    anchors = []
+    for a in soup.find_all('a', href=True):
+        href = a['href']
+        text = a.text.strip()
+        if text and len(text) > 1:  # Ignore empty or single-character anchor texts
             full_url = urljoin(base_url, href)
-            if urlparse(full_url).netloc == domain:
-                internal_links.append(full_url)
-            else:
-                external_links.append(full_url)
-        
-        return {
-            'internal_count': len(internal_links),
-            'external_count': len(external_links)
-        }
-    except:
-        return {'internal_count': 0, 'external_count': 0}
-
-def analyze_seo(soup, text_content):
-    """Analyze SEO elements"""
-    try:
-        readability_score = textstat.flesch_reading_ease(text_content)
-        return {
-            'readability_score': readability_score
-        }
-    except:
-        return {'readability_score': 0}
+            anchors.append({
+                'text': text,
+                'href': full_url,
+                'internal': urlparse(full_url).netloc == urlparse(base_url).netloc
+            })
+    return anchors
 
 def enhanced_analyze_url(url):
-    """Enhanced URL analysis with additional metrics"""
+    """Enhanced URL analysis with additional SEO metrics"""
     try:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -135,37 +121,42 @@ def enhanced_analyze_url(url):
             'images_missing_alt': 0,
             'internal_links': 0,
             'external_links': 0,
-            'readability_score': 0
+            'readability_score': 0,
+            'meta_tags': {},
+            'headings': {},
+            'keywords': {},
+            'anchors': []
         }
         
-        # Measure load time
-        load_time = get_load_time(url)
-        result['load_time_ms'] = load_time if load_time else 0
+        # Measure load time and check SSL
+        result['load_time_ms'] = get_load_time(url) or 0
+        result['ssl_valid'], _ = check_ssl(url)
         
-        # Check SSL
-        ssl_valid, ssl_expiry = check_ssl(url)
-        result['ssl_valid'] = ssl_valid
-        
+        # Fetch and parse page content
         response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
+        text_content = ' '.join([p.text for p in soup.find_all(['p', 'div', 'span'])])
         
-        # Extract text content
-        text_content = ' '.join([p.text for p in soup.find_all('p')])
+        # Basic metrics
         result['word_count'] = len(text_content.split())
         
-        # Image analysis
+        # Extract SEO elements
+        result['meta_tags'] = extract_meta_tags(soup)
+        result['headings'] = extract_headings(soup)
+        result['keywords'] = extract_keywords(text_content)
+        result['anchors'] = extract_anchors(soup, url)
+        
+        # Image and link analysis
         image_data = analyze_images(soup, url)
         result['image_count'] = image_data['total_count']
         result['images_missing_alt'] = image_data['missing_alt']
         
-        # Link analysis
         link_data = analyze_links(soup, url)
         result['internal_links'] = link_data['internal_count']
         result['external_links'] = link_data['external_count']
         
-        # SEO analysis
-        seo_data = analyze_seo(soup, text_content)
-        result['readability_score'] = seo_data['readability_score']
+        # Readability analysis
+        result['readability_score'] = textstat.flesch_reading_ease(text_content)
         
         return result
         
@@ -180,32 +171,53 @@ def enhanced_analyze_url(url):
             'images_missing_alt': 0,
             'internal_links': 0,
             'external_links': 0,
-            'readability_score': 0
+            'readability_score': 0,
+            'meta_tags': {},
+            'headings': {},
+            'keywords': {},
+            'anchors': []
         }
 
-def create_visualization(df):
-    """Create visualization of analysis results"""
-    try:
-        plt.figure(figsize=(10, 6))
+def create_detailed_report(results):
+    """Create a detailed report including all SEO elements"""
+    report = []
+    
+    for result in results:
+        url_report = {
+            'URL': result['url'],
+            'Status': result['status'],
+            'Load Time (ms)': result['load_time_ms'],
+            'SSL Valid': result['ssl_valid'],
+            'Word Count': result['word_count'],
+            'Readability Score': result['readability_score'],
+        }
         
-        # Select numeric columns for visualization
-        numeric_cols = ['word_count', 'internal_links', 'external_links',
-                       'image_count', 'readability_score']
-        plot_data = df[numeric_cols].mean()
+        # Add meta tags
+        for key, value in result['meta_tags'].items():
+            url_report[f'Meta_{key}'] = value
         
-        sns.barplot(x=plot_data.index, y=plot_data.values)
-        plt.xticks(rotation=45)
-        plt.title('Average Metrics Across All URLs')
+        # Add heading counts
+        for key, value in result['headings'].items():
+            if key.endswith('_count'):
+                url_report[f'Heading_{key}'] = value
         
-        return plt
-    except Exception as e:
-        st.error(f"Error creating visualization: {str(e)}")
-        return None
+        # Add top keywords (first 10)
+        keywords = list(result['keywords'].items())[:10]
+        for i, (keyword, count) in enumerate(keywords, 1):
+            url_report[f'Keyword_{i}'] = f'{keyword} ({count})'
+        
+        # Add link counts
+        url_report['Internal Links'] = result['internal_links']
+        url_report['External Links'] = result['external_links']
+        
+        report.append(url_report)
+    
+    return pd.DataFrame(report)
 
 def main():
-    st.set_page_config(page_title="Enhanced URL Content Analyzer", layout="wide")
+    st.set_page_config(page_title="Enhanced SEO Content Analyzer", layout="wide")
     
-    st.title("Enhanced URL Content Analyzer")
+    st.title("Enhanced SEO Content Analyzer")
     
     # URL input
     urls_input = st.text_area("Enter URLs (one per line, max 10)", height=200)
@@ -226,33 +238,46 @@ def main():
                 result = enhanced_analyze_url(url)
                 results.append(result)
             
-            # Create DataFrame
-            df = pd.DataFrame(results)
+            # Create detailed report
+            df = create_detailed_report(results)
             
             # Display summary metrics
             col1, col2, col3, col4 = st.columns(4)
-            
             with col1:
                 st.metric("URLs Analyzed", len(results))
             with col2:
-                avg_load = df['load_time_ms'].mean()
+                avg_load = df['Load Time (ms)'].mean()
                 st.metric("Avg Load Time (ms)", f"{int(avg_load)}")
             with col3:
-                ssl_valid = df['ssl_valid'].sum()
+                ssl_valid = df['SSL Valid'].sum()
                 st.metric("SSL Valid", f"{int(ssl_valid)}/{len(results)}")
             with col4:
-                avg_score = df['readability_score'].mean()
+                avg_score = df['Readability Score'].mean()
                 st.metric("Avg Readability", f"{avg_score:.1f}")
-            
-            # Display visualization
-            st.subheader("Analysis Visualization")
-            fig = create_visualization(df)
-            if fig:
-                st.pyplot(fig)
             
             # Display detailed results
             st.subheader("Detailed Analysis")
             st.dataframe(df)
+            
+            # Display raw data for each URL
+            st.subheader("Raw Data (Expandable)")
+            for result in results:
+                with st.expander(f"Detailed data for {result['url']}"):
+                    # Meta Tags
+                    st.write("Meta Tags:")
+                    st.json(result['meta_tags'])
+                    
+                    # Headings
+                    st.write("Headings:")
+                    st.json({k: v for k, v in result['headings'].items() if not k.endswith('_count')})
+                    
+                    # Keywords
+                    st.write("Top Keywords:")
+                    st.json(dict(list(result['keywords'].items())[:20]))
+                    
+                    # Anchors
+                    st.write("Anchor Texts:")
+                    st.json(result['anchors'])
             
             # Export options
             st.subheader("Export Results")
@@ -263,19 +288,19 @@ def main():
                 st.download_button(
                     "Download CSV",
                     csv,
-                    "url_analysis.csv",
+                    "seo_analysis.csv",
                     "text/csv"
                 )
             
             with col2:
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                    df.to_excel(writer, sheet_name='URL Analysis', index=False)
+                    df.to_excel(writer, sheet_name='SEO Analysis', index=False)
                 excel_data = output.getvalue()
                 st.download_button(
                     "Download Excel",
                     excel_data,
-                    "url_analysis.xlsx",
+                    "seo_analysis.xlsx",
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
 
