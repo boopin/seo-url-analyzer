@@ -9,3 +9,7 @@ matplotlib==3.8.2
 seaborn==0.13.2
 lxml[html_clean]
 readability-lxml==0.8.1
+setuptools>=65.5.1
+lxml_html_clean>=1.0.0
+openpyxl>=3.1.2
+xlsxwriter>=3.1.9
