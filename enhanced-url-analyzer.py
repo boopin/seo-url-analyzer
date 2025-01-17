@@ -154,6 +154,12 @@ def enhanced_analyze_url(url):
             'anchors': []
         }
 
+def find_common_keywords(results):
+    """Find keywords common across all URLs."""
+    keyword_sets = [set(result['keywords'].keys()) for result in results]
+    common_keywords = set.intersection(*keyword_sets) if keyword_sets else set()
+    return list(common_keywords)
+
 def main():
     st.set_page_config(page_title="Enhanced SEO Content Analyzer", layout="wide")
 
@@ -225,6 +231,11 @@ def main():
             st.dataframe(anchors_data)
             anchors_csv = anchors_data.to_csv(index=False).encode('utf-8')
             st.download_button("Download Anchors CSV", anchors_csv, "anchors_analysis.csv", "text/csv")
+
+            # Find and display common keywords
+            common_keywords = find_common_keywords(results)
+            st.subheader("Common Keywords Across All URLs")
+            st.write(", ".join(common_keywords) if common_keywords else "No common keywords found.")
 
 if __name__ == "__main__":
     main()
