@@ -94,8 +94,14 @@ def enhanced_analyze_url(url):
             'status': 'Success',
             'load_time_ms': 0,
             'word_count': 0,
-            'meta_tags': {},
-            'headings': {},
+            'meta_title': '',
+            'meta_description': '',
+            'h1_count': 0,
+            'h2_count': 0,
+            'h3_count': 0,
+            'h4_count': 0,
+            'h5_count': 0,
+            'h6_count': 0,
             'keywords': {},
             'anchors': []
         }
@@ -113,8 +119,18 @@ def enhanced_analyze_url(url):
         result['word_count'] = len(text_content.split())
 
         # Extract SEO elements
-        result['meta_tags'] = extract_meta_tags(soup)
-        result['headings'] = extract_headings(soup)
+        meta_tags = extract_meta_tags(soup)
+        result['meta_title'] = meta_tags.get('title', '')
+        result['meta_description'] = meta_tags.get('description', '')
+
+        headings = extract_headings(soup)
+        result['h1_count'] = headings.get('h1_count', 0)
+        result['h2_count'] = headings.get('h2_count', 0)
+        result['h3_count'] = headings.get('h3_count', 0)
+        result['h4_count'] = headings.get('h4_count', 0)
+        result['h5_count'] = headings.get('h5_count', 0)
+        result['h6_count'] = headings.get('h6_count', 0)
+
         result['keywords'] = extract_keywords(text_content)
         result['anchors'] = extract_anchors(soup, url)
 
@@ -126,8 +142,14 @@ def enhanced_analyze_url(url):
             'status': f'Error: {str(e)}',
             'load_time_ms': 0,
             'word_count': 0,
-            'meta_tags': {},
-            'headings': {},
+            'meta_title': '',
+            'meta_description': '',
+            'h1_count': 0,
+            'h2_count': 0,
+            'h3_count': 0,
+            'h4_count': 0,
+            'h5_count': 0,
+            'h6_count': 0,
             'keywords': {},
             'anchors': []
         }
@@ -159,13 +181,23 @@ def main():
             # Create DataFrame for main display
             df = pd.DataFrame(results)
 
-            # Display detailed results
+            # Customize column display
+            display_df = df[['url', 'status', 'load_time_ms', 'word_count', 'meta_title', 'meta_description',
+                             'h1_count', 'h2_count', 'h3_count', 'h4_count', 'h5_count', 'h6_count']]
+
+            # Apply visual enhancements to the table
             st.subheader("Detailed Analysis")
-            st.dataframe(df)
+            st.dataframe(display_df.style.set_properties(**{
+                'background-color': '#f5f5f5',
+                'color': '#333',
+                'border-color': 'black',
+                'font-family': 'Arial',
+                'text-align': 'center'
+            }))
 
             # Export options
             st.subheader("Export Results")
-            csv = df.to_csv(index=False).encode('utf-8')
+            csv = display_df.to_csv(index=False).encode('utf-8')
             st.download_button("Download CSV", csv, "seo_analysis.csv", "text/csv")
 
 if __name__ == "__main__":
