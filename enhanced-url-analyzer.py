@@ -5,39 +5,25 @@ Created: January 2024
 Description: Advanced URL analysis tool with enhanced SEO analysis capabilities
 """
 
-import streamlit as st
-import requests
-from bs4 import BeautifulSoup
-import pandas as pd
-from urllib.parse import urlparse, urljoin
-import io
-import re
-import time
-import ssl
-import socket
-import json
-from concurrent.futures import ThreadPoolExecutor
-from readability import Document
-import textstat
-from PIL import Image
-from io import BytesIO
-import matplotlib.pyplot as plt
-import seaborn as sns
-from collections import Counter
-import nltk
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
-from string import punctuation
+[Previous imports remain the same...]
 
-# Download required NLTK data
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
-try:
-    nltk.data.find('corpora/stopwords')
-except LookupError:
-    nltk.download('stopwords')
+def get_load_time(url):
+    """Measure page load time"""
+    try:
+        start_time = time.time()
+        requests.get(url, timeout=10)
+        end_time = time.time()
+        return round((end_time - start_time) * 1000)  # Convert to milliseconds
+    except Exception:
+        return None
+
+def json_serialize(obj):
+    """Custom JSON serializer to handle sets and other non-serializable objects"""
+    if isinstance(obj, set):
+        return list(obj)
+    if isinstance(obj, (dict, list)):
+        return obj
+    return str(obj)
 
 def extract_meta_tags(soup):
     """Extract meta tags from the page"""
@@ -48,7 +34,7 @@ def extract_meta_tags(soup):
     
     # Extract meta description
     meta_description = soup.find('meta', attrs={'name': 'description'})
-    meta_tags['description'] = meta_description['content'].strip() if meta_description else ''
+    meta_tags['description'] = meta_description['content'].strip() if meta_description and meta_description.get('content') else ''
     
     # Extract other important meta tags
     for meta in soup.find_all('meta'):
@@ -73,35 +59,32 @@ def extract_headings(soup):
         headings[f'{heading_tag}_count'] = len(headings_list)
     return headings
 
-def extract_keywords(text, num_keywords=20):
-    """Extract commonly used keywords from the text"""
-    # Tokenize and convert to lowercase
-    tokens = word_tokenize(text.lower())
-    
-    # Remove stopwords and punctuation
-    stop_words = set(stopwords.words('english'))
-    tokens = [word for word in tokens if word not in stop_words and word not in punctuation and len(word) > 2]
-    
-    # Count word frequencies
-    word_freq = Counter(tokens)
-    
-    # Get the most common words
-    return dict(word_freq.most_common(num_keywords))
+def analyze_images(soup, base_url):
+    """Analyze images on the page"""
+    try:
+        images = soup.find_all('img')
+        image_data = {
+            'total_count': len(images),
+            'missing_alt': len([img for img in images if not img.get('alt')])
+        }
+        return image_data
+    except Exception:
+        return {'total_count': 0, 'missing_alt': 0}
 
-def extract_anchors(soup, base_url):
-    """Extract and analyze anchor texts and their targets"""
-    anchors = []
-    for a in soup.find_all('a', href=True):
-        href = a['href']
-        text = a.text.strip()
-        if text and len(text) > 1:  # Ignore empty or single-character anchor texts
-            full_url = urljoin(base_url, href)
-            anchors.append({
-                'text': text,
-                'href': full_url,
-                'internal': urlparse(full_url).netloc == urlparse(base_url).netloc
-            })
-    return anchors
+def analyze_links(soup, base_url):
+    """Analyze links on the page"""
+    try:
+        links = soup.find_all('a', href=True)
+        domain = urlparse(base_url).netloc
+        internal_count = sum(1 for link in links if urlparse(urljoin(base_url, link['href'])).netloc == domain)
+        return {
+            'internal_count': internal_count,
+            'external_count': len(links) - internal_count
+        }
+    except Exception:
+        return {'internal_count': 0, 'external_count': 0}
+
+[Previous extract_keywords and extract_anchors functions remain the same...]
 
 def enhanced_analyze_url(url):
     """Enhanced URL analysis with additional SEO metrics"""
@@ -128,14 +111,18 @@ def enhanced_analyze_url(url):
             'anchors': []
         }
         
-        # Measure load time and check SSL
-        result['load_time_ms'] = get_load_time(url) or 0
-        result['ssl_valid'], _ = check_ssl(url)
+        # Measure load time
+        load_time = get_load_time(url)
+        result['load_time_ms'] = load_time if load_time else 0
+        
+        # Check SSL
+        ssl_valid, _ = check_ssl(url)
+        result['ssl_valid'] = ssl_valid
         
         # Fetch and parse page content
         response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
-        text_content = ' '.join([p.text for p in soup.find_all(['p', 'div', 'span'])])
+        text_content = ' '.join([p.text.strip() for p in soup.find_all(['p', 'div', 'span'])])
         
         # Basic metrics
         result['word_count'] = len(text_content.split())
@@ -178,42 +165,6 @@ def enhanced_analyze_url(url):
             'anchors': []
         }
 
-def create_detailed_report(results):
-    """Create a detailed report including all SEO elements"""
-    report = []
-    
-    for result in results:
-        url_report = {
-            'URL': result['url'],
-            'Status': result['status'],
-            'Load Time (ms)': result['load_time_ms'],
-            'SSL Valid': result['ssl_valid'],
-            'Word Count': result['word_count'],
-            'Readability Score': result['readability_score'],
-        }
-        
-        # Add meta tags
-        for key, value in result['meta_tags'].items():
-            url_report[f'Meta_{key}'] = value
-        
-        # Add heading counts
-        for key, value in result['headings'].items():
-            if key.endswith('_count'):
-                url_report[f'Heading_{key}'] = value
-        
-        # Add top keywords (first 10)
-        keywords = list(result['keywords'].items())[:10]
-        for i, (keyword, count) in enumerate(keywords, 1):
-            url_report[f'Keyword_{i}'] = f'{keyword} ({count})'
-        
-        # Add link counts
-        url_report['Internal Links'] = result['internal_links']
-        url_report['External Links'] = result['external_links']
-        
-        report.append(url_report)
-    
-    return pd.DataFrame(report)
-
 def main():
     st.set_page_config(page_title="Enhanced SEO Content Analyzer", layout="wide")
     
@@ -238,7 +189,7 @@ def main():
                 result = enhanced_analyze_url(url)
                 results.append(result)
             
-            # Create detailed report
+            # Create DataFrame for main display
             df = create_detailed_report(results)
             
             # Display summary metrics
@@ -265,19 +216,20 @@ def main():
                 with st.expander(f"Detailed data for {result['url']}"):
                     # Meta Tags
                     st.write("Meta Tags:")
-                    st.json(result['meta_tags'])
+                    st.json(json.dumps(result['meta_tags'], default=json_serialize))
                     
                     # Headings
                     st.write("Headings:")
-                    st.json({k: v for k, v in result['headings'].items() if not k.endswith('_count')})
+                    headings_data = {k: v for k, v in result['headings'].items() if not k.endswith('_count')}
+                    st.json(json.dumps(headings_data, default=json_serialize))
                     
                     # Keywords
                     st.write("Top Keywords:")
-                    st.json(dict(list(result['keywords'].items())[:20]))
+                    st.json(json.dumps(dict(list(result['keywords'].items())[:20]), default=json_serialize))
                     
                     # Anchors
                     st.write("Anchor Texts:")
-                    st.json(result['anchors'])
+                    st.json(json.dumps(result['anchors'], default=json_serialize))
             
             # Export options
             st.subheader("Export Results")
