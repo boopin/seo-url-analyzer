@@ -83,21 +83,10 @@ def extract_headings(soup):
         headings[f'{heading_tag}_count'] = len(headings_list)
     return headings
 
-def parse_keywords(keywords_str):
-    """Parse a string of keywords into a dictionary"""
-    keywords = {}
-    for item in keywords_str.split(','):
-        if '(' in item and ')' in item:
-            word, count = item.rsplit('(', 1)
-            word = word.strip()
-            count = count.strip(')').strip()
-            if word and count.isdigit():
-                keywords[word] = int(count)
-    return keywords
-
 def find_common_keywords(results):
     """Find keywords common across all URLs."""
-    keyword_sets = [set(parse_keywords(result['keywords']).keys()) for result in results if result['keywords']]
+    # Extract keyword sets directly from dictionaries
+    keyword_sets = [set(result['keywords'].keys()) for result in results if result['keywords']]
     common_keywords = set.intersection(*keyword_sets) if keyword_sets else set()
     return list(common_keywords)
 
