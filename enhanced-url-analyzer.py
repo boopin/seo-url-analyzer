@@ -75,12 +75,14 @@ def extract_meta_tags(soup):
 
 def extract_headings(soup):
     """Extract all headings (H1-H6) from the page"""
-    headings = {}
+    headings = []
     for i in range(1, 7):
         heading_tag = f'h{i}'
-        headings_list = [h.text.strip() for h in soup.find_all(heading_tag)]
-        headings[heading_tag] = headings_list
-        headings[f'{heading_tag}_count'] = len(headings_list)
+        for h in soup.find_all(heading_tag):
+            headings.append({
+                'level': heading_tag.upper(),
+                'text': h.text.strip()
+            })
     return headings
 
 def enhanced_analyze_url(url):
@@ -103,7 +105,8 @@ def enhanced_analyze_url(url):
             'h5_count': 0,
             'h6_count': 0,
             'keywords': {},
-            'anchors': []
+            'anchors': [],
+            'headings': []
         }
 
         # Measure load time
@@ -123,13 +126,15 @@ def enhanced_analyze_url(url):
         result['meta_title'] = meta_tags.get('title', '')
         result['meta_description'] = meta_tags.get('description', '')
 
+        # Extract headings and count
         headings = extract_headings(soup)
-        result['h1_count'] = headings.get('h1_count', 0)
-        result['h2_count'] = headings.get('h2_count', 0)
-        result['h3_count'] = headings.get('h3_count', 0)
-        result['h4_count'] = headings.get('h4_count', 0)
-        result['h5_count'] = headings.get('h5_count', 0)
-        result['h6_count'] = headings.get('h6_count', 0)
+        result['headings'] = headings
+        result['h1_count'] = sum(1 for h in headings if h['level'] == 'H1')
+        result['h2_count'] = sum(1 for h in headings if h['level'] == 'H2')
+        result['h3_count'] = sum(1 for h in headings if h['level'] == 'H3')
+        result['h4_count'] = sum(1 for h in headings if h['level'] == 'H4')
+        result['h5_count'] = sum(1 for h in headings if h['level'] == 'H5')
+        result['h6_count'] = sum(1 for h in headings if h['level'] == 'H6')
 
         result['keywords'] = extract_keywords(text_content)
         result['anchors'] = extract_anchors(soup, url)
@@ -151,7 +156,8 @@ def enhanced_analyze_url(url):
             'h5_count': 0,
             'h6_count': 0,
             'keywords': {},
-            'anchors': []
+            'anchors': [],
+            'headings': []
         }
 
 def main():
@@ -171,12 +177,21 @@ def main():
 
             progress_bar = st.progress(0)
             results = []
+            headings_data = []
 
             # Analyze URLs with progress tracking
             for i, url in enumerate(urls):
                 progress_bar.progress((i + 1) / len(urls))
                 result = enhanced_analyze_url(url)
                 results.append(result)
+
+                # Collect headings data for export
+                for heading in result['headings']:
+                    headings_data.append({
+                        'url': url,
+                        'level': heading['level'],
+                        'text': heading['text']
+                    })
 
             # Create DataFrame for main display
             df = pd.DataFrame(results)
@@ -225,6 +240,13 @@ def main():
             st.dataframe(anchors_data)
             anchors_csv = anchors_data.to_csv(index=False).encode('utf-8')
             st.download_button("Download Anchors CSV", anchors_csv, "anchors_analysis.csv", "text/csv")
+
+            # Export headings
+            headings_df = pd.DataFrame(headings_data)
+            st.subheader("Export All Headings")
+            st.dataframe(headings_df)
+            headings_csv = headings_df.to_csv(index=False).encode('utf-8')
+            st.download_button("Download Headings CSV", headings_csv, "headings_analysis.csv", "text/csv")
 
 if __name__ == "__main__":
     main()
