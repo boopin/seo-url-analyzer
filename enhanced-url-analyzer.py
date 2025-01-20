@@ -1,6 +1,6 @@
 """
 Enhanced SEO Content Analyzer
-Version: 1.3
+Version: 1.4
 Updated: January 2025
 Description: Analyze webpages for SEO metrics like headings, keywords, internal links, external links, content structure, and mobile-friendliness.
 """
@@ -152,14 +152,14 @@ def analyze_url(url):
 
         # Internal links
         internal_links = extract_internal_links(soup, url)
-        result['internal_links'] = [{'url': link['url'], 'anchor': link['anchor_text']} for link in internal_links]
-        result['internal_link_display'] = ', '.join([f"{link['url']} ({link['anchor']})" for link in internal_links])
+        result['internal_links'] = [{'url': link['url'], 'anchor_text': link['anchor_text']} for link in internal_links]
+        result['internal_link_display'] = ', '.join([f"{link['url']} ({link['anchor_text']})" for link in internal_links])
         result['internal_link_count'] = len(internal_links)
 
         # External links
         external_links = extract_external_links(soup, url)
-        result['external_links'] = [{'url': link['url'], 'anchor': link['anchor_text']} for link in external_links]
-        result['external_link_display'] = ', '.join([f"{link['url']} ({link['anchor']})" for link in external_links])
+        result['external_links'] = [{'url': link['url'], 'anchor_text': link['anchor_text']} for link in external_links]
+        result['external_link_display'] = ', '.join([f"{link['url']} ({link['anchor_text']})" for link in external_links])
         result['external_link_count'] = len(external_links)
 
         # Images
@@ -209,11 +209,11 @@ def main():
 
                 # Collect internal links for export
                 for link in result['internal_links']:
-                    internal_links_data.append({'page_url': url, 'link_url': link['url'], 'anchor_text': link['anchor']})
+                    internal_links_data.append({'page_url': url, 'link_url': link['url'], 'anchor_text': link['anchor_text']})
 
                 # Collect external links for export
                 for link in result['external_links']:
-                    external_links_data.append({'page_url': url, 'link_url': link['url'], 'anchor_text': link['anchor']})
+                    external_links_data.append({'page_url': url, 'link_url': link['url'], 'anchor_text': link['anchor_text']})
 
             # Create DataFrame for display
             df = pd.DataFrame(results)
@@ -250,5 +250,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
