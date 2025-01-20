@@ -1,6 +1,6 @@
 """
 Enhanced SEO Content Analyzer
-Version: 2.3
+Version: 2.5
 Updated: January 2025
 Description: Analyze webpages for SEO metrics, including meta tags, headings (H1-H6), links, and readability scores.
 """
@@ -95,13 +95,6 @@ def extract_external_links(soup, base_url):
             anchor_text = a.text.strip()
             external_links.append({'url': href, 'anchor_text': anchor_text})
     return external_links
-
-def analyze_images(soup):
-    """Analyze all images on the page"""
-    images = soup.find_all('img')
-    total_images = len(images)
-    missing_alt = sum(1 for img in images if not img.get('alt'))
-    return total_images, missing_alt
 
 def analyze_url(url):
     """Analyze the URL for SEO metrics"""
@@ -226,6 +219,12 @@ def main():
                     "Average Internal Links": [df['internal_link_count'].mean()],
                     "Average External Links": [df['external_link_count'].mean()],
                     "Average Readability Score": [df['readability_score'].mean()],
+                    "Average H1 Count": [df['h1_count'].mean()],
+                    "Average H2 Count": [df['h2_count'].mean()],
+                    "Average H3 Count": [df['h3_count'].mean()],
+                    "Average H4 Count": [df['h4_count'].mean()],
+                    "Average H5 Count": [df['h5_count'].mean()],
+                    "Average H6 Count": [df['h6_count'].mean()],
                     "Total URLs": [len(df)],
                 }
                 summary_df = pd.DataFrame(summary)
@@ -234,20 +233,27 @@ def main():
             # Main Table Tab
             with tabs[1]:
                 st.subheader("Main Analysis Table")
-                st.download_button("Download Main Table", df.to_csv(index=False).encode('utf-8'), "main_table.csv", "text/csv")
-                st.dataframe(df)
+                display_columns = [
+                    'url', 'status', 'load_time_ms', 'word_count', 'readability_score',
+                    'internal_link_count', 'external_link_count', 'meta_title', 'meta_description',
+                    'h1_count', 'h2_count', 'h3_count', 'h4_count', 'h5_count', 'h6_count'
+                ]
+                st.download_button("Download Main Table", df[display_columns].to_csv(index=False).encode('utf-8'), "main_table.csv", "text/csv")
+                st.dataframe(df[display_columns])
 
             # Internal Links Tab
             with tabs[2]:
                 st.subheader("Internal Links")
-                st.download_button("Download Internal Links", pd.DataFrame(internal_links_data).to_csv(index=False).encode('utf-8'), "internal_links.csv", "text/csv")
-                st.dataframe(pd.DataFrame(internal_links_data))
+                internal_links_df = pd.DataFrame(internal_links_data)
+                st.download_button("Download Internal Links", internal_links_df.to_csv(index=False).encode('utf-8'), "internal_links.csv", "text/csv")
+                st.dataframe(internal_links_df)
 
             # External Links Tab
             with tabs[3]:
                 st.subheader("External Links")
-                st.download_button("Download External Links", pd.DataFrame(external_links_data).to_csv(index=False).encode('utf-8'), "external_links.csv", "text/csv")
-                st.dataframe(pd.DataFrame(external_links_data))
+                external_links_df = pd.DataFrame(external_links_data)
+                st.download_button("Download External Links", external_links_df.to_csv(index=False).encode('utf-8'), "external_links.csv", "text/csv")
+                st.dataframe(external_links_df)
 
             # Headings Tab
             with tabs[4]:
