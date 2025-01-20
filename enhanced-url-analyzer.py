@@ -51,8 +51,128 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Previous helper functions remain the same
-# [preprocess_url, get_load_time, extract_keywords, extract_meta_tags, etc.]
+# Helper Functions
+def preprocess_url(url):
+    """Ensure the URL has a valid scheme"""
+    if not url.startswith(('http://', 'https://')):
+        return f'https://{url}'
+    return url
+
+def get_load_time(url):
+    """Measure page load time"""
+    try:
+        start_time = time.time()
+        requests.get(url, timeout=10)
+        end_time = time.time()
+        return round((end_time - start_time) * 1000)  # Convert to milliseconds
+    except Exception:
+        return None
+
+def extract_meta_tags(soup):
+    """Extract meta tags from the page"""
+    meta_tags = {}
+    meta_tags['title'] = soup.title.text.strip() if soup.title else ''
+    meta_description = soup.find('meta', attrs={'name': 'description'})
+    meta_tags['description'] = meta_description['content'].strip() if meta_description else ''
+    return meta_tags
+
+def extract_headings(soup):
+    """Extract all headings (H1-H6) from the page"""
+    headings = []
+    for i in range(1, 7):
+        heading_tag = f'h{i}'
+        for h in soup.find_all(heading_tag):
+            headings.append({'level': heading_tag.upper(), 'text': h.text.strip()})
+    return headings
+
+def extract_internal_links(soup, base_url):
+    """Extract internal links and their anchor texts"""
+    internal_links = []
+    domain = urlparse(base_url).netloc
+    for a in soup.find_all('a', href=True):
+        href = urljoin(base_url, a['href'])
+        if urlparse(href).netloc == domain:
+            anchor_text = a.text.strip()
+            internal_links.append({'url': href, 'anchor_text': anchor_text})
+    return internal_links
+
+def extract_external_links(soup, base_url):
+    """Extract external links and their anchor texts"""
+    external_links = []
+    domain = urlparse(base_url).netloc
+    for a in soup.find_all('a', href=True):
+        href = urljoin(base_url, a['href'])
+        if urlparse(href).netloc != domain:
+            anchor_text = a.text.strip()
+            external_links.append({'url': href, 'anchor_text': anchor_text})
+    return external_links
+
+def analyze_url(url):
+    """Analyze the URL for SEO metrics"""
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    result = {
+        'url': url,
+        'status': 'Success',
+        'load_time_ms': 0,
+        'meta_title': '',
+        'meta_description': '',
+        'h1_count': 0,
+        'h2_count': 0,
+        'h3_count': 0,
+        'h4_count': 0,
+        'h5_count': 0,
+        'h6_count': 0,
+        'word_count': 0,
+        'readability_score': 0,
+        'internal_links': [],
+        'internal_link_count': 0,
+        'external_links': [],
+        'external_link_count': 0,
+    }
+    
+    try:
+        # Load time
+        result['load_time_ms'] = get_load_time(url)
+
+        # Fetch page content
+        response = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        text_content = ' '.join([p.text.strip() for p in soup.find_all(['p', 'div', 'span'])])
+
+        # Word count
+        result['word_count'] = len(text_content.split())
+
+        # Readability score
+        result['readability_score'] = flesch_reading_ease(text_content)
+
+        # Meta tags
+        meta_tags = extract_meta_tags(soup)
+        result['meta_title'] = meta_tags.get('title', '')
+        result['meta_description'] = meta_tags.get('description', '')
+
+        # Headings
+        result['headings'] = extract_headings(soup)
+        result['h1_count'] = sum(1 for h in result['headings'] if h['level'] == 'H1')
+        result['h2_count'] = sum(1 for h in result['headings'] if h['level'] == 'H2')
+        result['h3_count'] = sum(1 for h in result['headings'] if h['level'] == 'H3')
+        result['h4_count'] = sum(1 for h in result['headings'] if h['level'] == 'H4')
+        result['h5_count'] = sum(1 for h in result['headings'] if h['level'] == 'H5')
+        result['h6_count'] = sum(1 for h in result['headings'] if h['level'] == 'H6')
+
+        # Internal links
+        internal_links = extract_internal_links(soup, url)
+        result['internal_links'] = internal_links
+        result['internal_link_count'] = len(internal_links)
+
+        # External links
+        external_links = extract_external_links(soup, url)
+        result['external_links'] = external_links
+        result['external_link_count'] = len(external_links)
+
+    except Exception as e:
+        result['status'] = f"Error: {str(e)}"
+
+    return result
 
 def create_metric_card(title, value, description):
     """Create a styled metric card"""
@@ -89,13 +209,9 @@ def create_recommendations(result):
     return recommendations
 
 def main():
-    # Header with logo and title
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        st.image("https://via.placeholder.com/100", width=80)  # Replace with your logo
-    with col2:
-        st.title("Enhanced SEO Content Analyzer")
-        st.markdown("*Analyze and optimize your website content for better SEO performance*")
+    # Header with title
+    st.title("🔍 Enhanced SEO Content Analyzer")
+    st.markdown("*Analyze and optimize your website content for better SEO performance*")
 
     # Sidebar for configuration
     with st.sidebar:
@@ -156,11 +272,10 @@ def main():
         st.success(f"✅ Analysis completed for {len(urls)} URLs!")
 
         # Results display using tabs
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        tab1, tab2, tab3, tab4 = st.tabs([
             "📊 Overview",
             "📋 Detailed Results",
             "📈 Visualizations",
-            "🔍 Technical SEO",
             "💡 Recommendations"
         ])
 
@@ -205,22 +320,13 @@ def main():
                 use_container_width=True
             )
             
-            # Export buttons
-            col1, col2 = st.columns(2)
-            with col1:
-                st.download_button(
-                    "📥 Download Full Report (CSV)",
-                    df.to_csv(index=False).encode('utf-8'),
-                    "seo_analysis_report.csv",
-                    "text/csv"
-                )
-            with col2:
-                st.download_button(
-                    "📥 Download Full Report (Excel)",
-                    df.to_excel(index=False).encode('utf-8'),
-                    "seo_analysis_report.xlsx",
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+            # Export button
+            st.download_button(
+                "📥 Download Full Report (CSV)",
+                df.to_csv(index=False).encode('utf-8'),
+                "seo_analysis_report.csv",
+                "text/csv"
+            )
 
         with tab3:
             st.subheader("Data Visualizations")
@@ -247,26 +353,6 @@ def main():
             st.plotly_chart(fig_scatter, use_container_width=True)
 
         with tab4:
-            st.subheader("Technical SEO Analysis")
-            
-            for url, result in zip(urls, results):
-                with st.expander(f"Technical Details - {url}"):
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.markdown("**Meta Tags**")
-                        st.code(f"""
-Title: {result['meta_title']}
-Description: {result['meta_description']}
-                        """)
-                        
-                    with col2:
-                        st.markdown("**Heading Structure**")
-                        for i in range(1, 7):
-                            count = result[f'h{i}_count']
-                            st.progress(count/10, text=f"H{i} Tags: {count}")
-
-        with tab5:
             st.subheader("SEO Recommendations")
             
             for url, result in zip(urls, results):
