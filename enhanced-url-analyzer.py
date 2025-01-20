@@ -1,6 +1,6 @@
 """
 Enhanced SEO Content Analyzer
-Version: 1.7
+Version: 1.8
 Updated: January 2025
 Description: Analyze webpages for SEO metrics, including meta tags, headings (H1-H6), internal/external links, and performance statistics.
 """
@@ -74,9 +74,10 @@ def extract_internal_links(soup, base_url):
     domain = urlparse(base_url).netloc
     for a in soup.find_all('a', href=True):
         href = urljoin(base_url, a['href'])
-        if urlparse(href).netloc == domain:  # Internal link
+        if urlparse(href).netloc == domain:
             anchor_text = a.text.strip()
             internal_links.append({'url': href, 'anchor_text': anchor_text})
+    print(f"Extracted internal links for {base_url}: {internal_links}")  # Debugging
     return internal_links
 
 def extract_external_links(soup, base_url):
@@ -85,9 +86,10 @@ def extract_external_links(soup, base_url):
     domain = urlparse(base_url).netloc
     for a in soup.find_all('a', href=True):
         href = urljoin(base_url, a['href'])
-        if urlparse(href).netloc != domain:  # External link
+        if urlparse(href).netloc != domain:
             anchor_text = a.text.strip()
             external_links.append({'url': href, 'anchor_text': anchor_text})
+    print(f"Extracted external links for {base_url}: {external_links}")  # Debugging
     return external_links
 
 def analyze_images(soup):
@@ -119,7 +121,9 @@ def analyze_url(url):
         'h6_count': 0,
         'word_count': 0,
         'readability_score': 0,
+        'internal_links': [],
         'internal_link_count': 0,
+        'external_links': [],
         'external_link_count': 0,
         'total_images': 0,
         'missing_alt_count': 0,
@@ -144,6 +148,7 @@ def analyze_url(url):
 
         # Headings
         headings = extract_headings(soup)
+        result['headings'] = headings
         result['h1_count'] = sum(1 for h in headings if h['level'] == 'H1')
         result['h2_count'] = sum(1 for h in headings if h['level'] == 'H2')
         result['h3_count'] = sum(1 for h in headings if h['level'] == 'H3')
@@ -153,10 +158,12 @@ def analyze_url(url):
 
         # Internal links
         internal_links = extract_internal_links(soup, url)
+        result['internal_links'] = internal_links
         result['internal_link_count'] = len(internal_links)
 
         # External links
         external_links = extract_external_links(soup, url)
+        result['external_links'] = external_links
         result['external_link_count'] = len(external_links)
 
         # Images
@@ -242,7 +249,7 @@ def main():
             st.dataframe(internal_links_df)
             st.download_button("Download Internal Links", internal_links_df.to_csv(index=False).encode('utf-8'), "internal_links.csv", "text/csv")
 
-            # External links table
+           # External links table
             st.subheader("External Links")
             external_links_df = pd.DataFrame(external_links_data)
             st.dataframe(external_links_df)
