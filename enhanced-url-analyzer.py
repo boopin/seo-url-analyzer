@@ -1,8 +1,8 @@
 """
 Enhanced SEO Content Analyzer
-Version: 2.0
+Version: 2.1
 Updated: January 2025
-Description: Analyze webpages for SEO metrics, including meta tags, headings (H1-H6), and link details.
+Description: Analyze webpages for SEO metrics, including meta tags, headings (H1-H6), links, and readability scores.
 """
 
 import streamlit as st
@@ -119,6 +119,7 @@ def analyze_url(url):
         'h5_count': 0,
         'h6_count': 0,
         'word_count': 0,
+        'readability_score': 0,
         'internal_links': [],
         'internal_link_count': 0,
         'external_links': [],
@@ -135,6 +136,9 @@ def analyze_url(url):
 
         # Word count
         result['word_count'] = len(text_content.split())
+
+        # Readability score
+        result['readability_score'] = flesch_reading_ease(text_content)
 
         # Meta tags
         meta_tags = extract_meta_tags(soup)
@@ -180,7 +184,7 @@ def main():
         }
         </style>
         <div class="header">Enhanced SEO Content Analyzer</div>
-        <div class="sub-header">Analyze webpages for SEO performance, meta tags, headings (H1-H6), and link details.</div>
+        <div class="sub-header">Analyze webpages for SEO performance, meta tags, headings (H1-H6), links, and readability scores.</div>
     """, unsafe_allow_html=True)
 
     # Input URLs
@@ -209,6 +213,18 @@ def main():
                     result = analyze_url(url)
                     results.append(result)
 
+                    # Collect internal links for export
+                    for link in result.get('internal_links', []):
+                        internal_links_data.append({'page_url': url, 'link_url': link['url'], 'anchor_text': link['anchor_text']})
+
+                    # Collect external links for export
+                    for link in result.get('external_links', []):
+                        external_links_data.append({'page_url': url, 'link_url': link['url'], 'anchor_text': link['anchor_text']})
+
+                    # Collect headings for export
+                    for heading in extract_headings(BeautifulSoup(response.text, 'html.parser')):
+                        headings_data.append({'page_url': url, 'level': heading['level'], 'text': heading['text']})
+
             # Create DataFrame for main results
             df = pd.DataFrame(results)
 
@@ -223,6 +239,7 @@ def main():
                     "Average Word Count": [df['word_count'].mean()],
                     "Average Internal Links": [df['internal_link_count'].mean()],
                     "Average External Links": [df['external_link_count'].mean()],
+                    "Average Readability Score": [df['readability_score'].mean()],
                     "Total URLs": [len(df)],
                 }
                 summary_df = pd.DataFrame(summary)
@@ -239,17 +256,21 @@ def main():
                 st.subheader("Internal Links")
                 internal_links_df = pd.DataFrame(internal_links_data)
                 st.dataframe(internal_links_df)
+                st.download_button("Download Internal Links", internal_links_df.to_csv(index=False).encode('utf-8'), "internal_links.csv", "text/csv")
 
             # External Links Tab
             with tabs[3]:
                 st.subheader("External Links")
                 external_links_df = pd.DataFrame(external_links_data)
                 st.dataframe(external_links_df)
+                st.download_button("Download External Links", external_links_df.to_csv(index=False).encode('utf-8'), "external_links.csv", "text/csv")
 
             # Headings Tab
             with tabs[4]:
                 st.subheader("Headings (H1-H6)")
-                st.dataframe(df[['h1_count', 'h2_count']])
+                headings_df = pd.DataFrame(headings_data)
+                st.dataframe(headings_df)
+                st.download_button("Download Headings", headings_df.to_csv(index=False).encode('utf-8'), "headings.csv", "text/csv")
 
 if __name__ == "__main__":
     main()
