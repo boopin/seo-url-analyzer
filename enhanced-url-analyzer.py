@@ -1,3 +1,10 @@
+"""
+Enhanced SEO Content Analyzer
+Version: 1.2
+Updated: January 2025
+Description: Analyze webpages for SEO metrics like headings, keywords, internal links, external links, content structure, and mobile-friendliness.
+"""
+
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
@@ -67,10 +74,33 @@ def extract_internal_links(soup, base_url):
     domain = urlparse(base_url).netloc
     for a in soup.find_all('a', href=True):
         href = urljoin(base_url, a['href'])
-        if urlparse(href).netloc == domain:  # Check if it's an internal link
+        if urlparse(href).netloc == domain:  # Internal link
             anchor_text = a.text.strip()
             internal_links.append({'url': href, 'anchor_text': anchor_text})
     return internal_links
+
+def extract_external_links(soup, base_url):
+    """Extract external links and their anchor texts"""
+    external_links = []
+    domain = urlparse(base_url).netloc
+    for a in soup.find_all('a', href=True):
+        href = urljoin(base_url, a['href'])
+        if urlparse(href).netloc != domain:  # External link
+            anchor_text = a.text.strip()
+            external_links.append({'url': href, 'anchor_text': anchor_text})
+    return external_links
+
+def analyze_images(soup):
+    """Analyze all images on the page"""
+    images = soup.find_all('img')
+    total_images = len(images)
+    missing_alt = sum(1 for img in images if not img.get('alt'))
+    return total_images, missing_alt
+
+def check_mobile_friendly(soup):
+    """Check if the page is mobile-friendly"""
+    viewport = soup.find('meta', attrs={'name': 'viewport'})
+    return bool(viewport)
 
 def analyze_url(url):
     """Analyze the URL for SEO metrics"""
@@ -90,9 +120,13 @@ def analyze_url(url):
         'word_count': 0,
         'readability_score': 0,
         'keywords': {},
-        'headings': [],
         'internal_links': [],
-        'internal_link_count': 0
+        'internal_link_count': 0,
+        'external_links': [],
+        'external_link_count': 0,
+        'total_images': 0,
+        'missing_alt_count': 0,
+        'mobile_friendly': False
     }
     try:
         # Load time
@@ -113,14 +147,27 @@ def analyze_url(url):
 
         # Headings
         headings = extract_headings(soup)
-        result['headings'] = headings
-        for i in range(1, 7):
-            result[f'h{i}_count'] = sum(1 for h in headings if h['level'] == f'H{i}')
+        result['h1_count'] = sum(1 for h in headings if h['level'] == 'H1')
+        result['h2_count'] = sum(1 for h in headings if h['level'] == 'H2')
+        result['h3_count'] = sum(1 for h in headings if h['level'] == 'H3')
 
         # Internal links
         internal_links = extract_internal_links(soup, url)
         result['internal_links'] = internal_links
         result['internal_link_count'] = len(internal_links)
+
+        # External links
+        external_links = extract_external_links(soup, url)
+        result['external_links'] = external_links
+        result['external_link_count'] = len(external_links)
+
+        # Images
+        total_images, missing_alt = analyze_images(soup)
+        result['total_images'] = total_images
+        result['missing_alt_count'] = missing_alt
+
+        # Mobile-friendliness
+        result['mobile_friendly'] = check_mobile_friendly(soup)
 
         # Readability
         result['readability_score'] = flesch_reading_ease(text_content)
@@ -136,6 +183,7 @@ def analyze_url(url):
 def main():
     st.set_page_config(page_title="Enhanced SEO Content Analyzer", layout="wide")
     st.title("Enhanced SEO Content Analyzer")
+    st.subheader("Analyze webpages for SEO performance, accessibility, and content structure.")
 
     # Input URLs
     urls_input = st.text_area("Enter URLs (one per line, max 10)", height=200)
@@ -148,49 +196,21 @@ def main():
                 urls = urls[:10]
 
             results = []
-            headings_data = []
-            internal_links_data = []
             progress_bar = st.progress(0)
 
             # Analyze each URL
             for i, url in enumerate(urls):
                 progress_bar.progress((i + 1) / len(urls))
-                result = analyze_url(url)
-                results.append(result)
-
-                # Collect headings
-                for heading in result['headings']:
-                    headings_data.append({'url': url, 'level': heading['level'], 'text': heading['text']})
-
-                # Collect internal links
-                for link in result['internal_links']:
-                    internal_links_data.append({'url': url, 'internal_url': link['url'], 'anchor_text': link['anchor_text']})
+                results.append(analyze_url(url))
 
             # Display results
             df = pd.DataFrame(results)
-            st.dataframe(df[['url', 'status', 'load_time_ms', 'word_count', 'internal_link_count', 'meta_title', 'meta_description', 'h1_count', 'h2_count', 'h3_count', 'h4_count', 'h5_count', 'h6_count', 'readability_score']])
-
-            # Display average word count and internal link count
-            average_word_count = df['word_count'].mean()
-            average_internal_links = df['internal_link_count'].mean()
-            col1, col2 = st.columns(2)
-            col1.metric("Average Word Count", f"{average_word_count:.2f}")
-            col2.metric("Average Internal Links", f"{average_internal_links:.2f}")
+            st.dataframe(df)
 
             # Export results
             st.subheader("Export Results")
             csv = df.to_csv(index=False).encode('utf-8')
             st.download_button("Download Main Analysis", csv, "seo_analysis.csv", "text/csv")
-
-            # Export headings
-            headings_df = pd.DataFrame(headings_data)
-            headings_csv = headings_df.to_csv(index=False).encode('utf-8')
-            st.download_button("Download Headings", headings_csv, "headings_analysis.csv", "text/csv")
-
-            # Export internal links
-            internal_links_df = pd.DataFrame(internal_links_data)
-            internal_links_csv = internal_links_df.to_csv(index=False).encode('utf-8')
-            st.download_button("Download Internal Links", internal_links_csv, "internal_links.csv", "text/csv")
 
 if __name__ == "__main__":
     main()
