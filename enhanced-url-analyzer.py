@@ -238,3 +238,17 @@ def main():
             csv = df.to_csv(index=False).encode('utf-8')
             st.download_button("Download Main Analysis", csv, "seo_analysis.csv", "text/csv")
 
+            # Export internal links
+            internal_links_df = pd.DataFrame(internal_links_data)
+            internal_links_csv = internal_links_df.to_csv(index=False).encode('utf-8')
+            st.download_button("Download Internal Links", internal_links_csv, "internal_links.csv", "text/csv")
+
+            # Export external links
+            external_links_df = pd.DataFrame(external_links_data)
+            external_links_csv = external_links_df.to_csv(index=False).encode('utf-8')
+            st.download_button("Download External Links", external_links_csv, "external_links.csv", "text/csv")
+
+if __name__ == "__main__":
+    main()
+
+
