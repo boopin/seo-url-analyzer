@@ -1,8 +1,8 @@
 """
 Enhanced SEO Content Analyzer
-Version: 1.5
+Version: 1.6
 Updated: January 2025
-Description: Analyze webpages for SEO metrics and generate detailed reports with averages and separate link tables.
+Description: Analyze webpages for SEO metrics, including meta tags, headings, internal/external links, and performance statistics.
 """
 
 import streamlit as st
@@ -116,9 +116,7 @@ def analyze_url(url):
         'h3_count': 0,
         'word_count': 0,
         'readability_score': 0,
-        'internal_links': [],
         'internal_link_count': 0,
-        'external_links': [],
         'external_link_count': 0,
         'total_images': 0,
         'missing_alt_count': 0,
@@ -149,12 +147,10 @@ def analyze_url(url):
 
         # Internal links
         internal_links = extract_internal_links(soup, url)
-        result['internal_links'] = internal_links
         result['internal_link_count'] = len(internal_links)
 
         # External links
         external_links = extract_external_links(soup, url)
-        result['external_links'] = external_links
         result['external_link_count'] = len(external_links)
 
         # Images
@@ -176,7 +172,7 @@ def analyze_url(url):
 def main():
     st.set_page_config(page_title="Enhanced SEO Content Analyzer", layout="wide")
     st.title("Enhanced SEO Content Analyzer")
-    st.subheader("Analyze webpages for SEO performance, accessibility, and content structure.")
+    st.subheader("Analyze webpages for SEO performance, meta tags, headings, and more.")
 
     # Input URLs
     urls_input = st.text_area("Enter URLs (one per line, max 10)", height=200)
@@ -189,8 +185,6 @@ def main():
                 urls = urls[:10]
 
             results = []
-            internal_links_data = []
-            external_links_data = []
             progress_bar = st.progress(0)
 
             # Analyze each URL
@@ -199,20 +193,14 @@ def main():
                 result = analyze_url(url)
                 results.append(result)
 
-                # Collect internal links for export
-                for link in result['internal_links']:
-                    internal_links_data.append({'page_url': url, 'link_url': link['url'], 'anchor_text': link['anchor_text']})
-
-                # Collect external links for export
-                for link in result['external_links']:
-                    external_links_data.append({'page_url': url, 'link_url': link['url'], 'anchor_text': link['anchor_text']})
-
             # Create DataFrame for main results
             df = pd.DataFrame(results)
 
             # Main display table
             st.subheader("Main Analysis Table")
-            st.dataframe(df[['url', 'status', 'load_time_ms', 'word_count', 'internal_link_count', 'external_link_count', 'readability_score']])
+            st.dataframe(df[['url', 'status', 'load_time_ms', 'meta_title', 'meta_description',
+                             'word_count', 'h1_count', 'h2_count', 'h3_count',
+                             'internal_link_count', 'external_link_count', 'readability_score']])
 
             # Summary table
             st.subheader("Summary Statistics")
@@ -226,18 +214,6 @@ def main():
             }
             summary_df = pd.DataFrame(summary)
             st.dataframe(summary_df)
-
-            # Internal links table
-            st.subheader("Internal Links")
-            internal_links_df = pd.DataFrame(internal_links_data)
-            st.dataframe(internal_links_df)
-            st.download_button("Download Internal Links", internal_links_df.to_csv(index=False).encode('utf-8'), "internal_links.csv", "text/csv")
-
-            # External links table
-            st.subheader("External Links")
-            external_links_df = pd.DataFrame(external_links_data)
-            st.dataframe(external_links_df)
-            st.download_button("Download External Links", external_links_df.to_csv(index=False).encode('utf-8'), "external_links.csv", "text/csv")
 
 if __name__ == "__main__":
     main()
