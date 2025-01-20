@@ -1,8 +1,7 @@
 """
 Enhanced SEO Content Analyzer
-Version: 1.8
+Version: 1.9
 Updated: January 2025
-Description: Analyze webpages for SEO metrics, including meta tags, headings (H1-H6), internal/external links, and performance statistics.
 """
 
 import streamlit as st
@@ -33,6 +32,12 @@ try:
     nltk.data.find("corpora/stopwords")
 except LookupError:
     nltk.download("stopwords", download_dir=nltk_data_path)
+
+def preprocess_url(url):
+    """Ensure the URL has a valid scheme (http or https)"""
+    if not url.startswith(('http://', 'https://')):
+        return f'https://{url}'
+    return url
 
 def get_load_time(url):
     """Measure page load time"""
@@ -77,7 +82,6 @@ def extract_internal_links(soup, base_url):
         if urlparse(href).netloc == domain:
             anchor_text = a.text.strip()
             internal_links.append({'url': href, 'anchor_text': anchor_text})
-    print(f"Extracted internal links for {base_url}: {internal_links}")  # Debugging
     return internal_links
 
 def extract_external_links(soup, base_url):
@@ -89,7 +93,6 @@ def extract_external_links(soup, base_url):
         if urlparse(href).netloc != domain:
             anchor_text = a.text.strip()
             external_links.append({'url': href, 'anchor_text': anchor_text})
-    print(f"Extracted external links for {base_url}: {external_links}")  # Debugging
     return external_links
 
 def analyze_images(soup):
@@ -193,6 +196,9 @@ def main():
 
     if st.button("Analyze URLs"):
         if urls:
+            # Preprocess URLs
+            urls = [preprocess_url(url) for url in urls]
+            
             if len(urls) > 10:
                 st.warning("Maximum 10 URLs allowed. Only the first 10 will be analyzed.")
                 urls = urls[:10]
@@ -249,7 +255,7 @@ def main():
             st.dataframe(internal_links_df)
             st.download_button("Download Internal Links", internal_links_df.to_csv(index=False).encode('utf-8'), "internal_links.csv", "text/csv")
 
-           # External links table
+            # External links table
             st.subheader("External Links")
             external_links_df = pd.DataFrame(external_links_data)
             st.dataframe(external_links_df)
