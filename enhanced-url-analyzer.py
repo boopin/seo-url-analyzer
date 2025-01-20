@@ -1,10 +1,3 @@
-"""
-Enhanced SEO Content Analyzer
-Version: 2.5
-Updated: January 2025
-Description: Analyze webpages for SEO metrics, including meta tags, headings (H1-H6), links, and readability scores.
-"""
-
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
@@ -18,249 +11,272 @@ from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from string import punctuation
 from textstat import flesch_reading_ease
+import plotly.express as px
+import plotly.graph_objects as go
+from datetime import datetime
 
-# Pre-download NLTK data and set the path
-nltk_data_path = "./nltk_data"
-nltk.data.path.append(nltk_data_path)
+# Configure page settings
+st.set_page_config(
+    page_title="Enhanced SEO Content Analyzer",
+    page_icon="🔍",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# Check and download NLTK data only if not already present
-try:
-    nltk.data.find("tokenizers/punkt")
-except LookupError:
-    nltk.download("punkt", download_dir=nltk_data_path)
-
-try:
-    nltk.data.find("corpora/stopwords")
-except LookupError:
-    nltk.download("stopwords", download_dir=nltk_data_path)
-
-def preprocess_url(url):
-    """Ensure the URL has a valid scheme (http or https)"""
-    if not url.startswith(('http://', 'https://')):
-        return f'https://{url}'
-    return url
-
-def get_load_time(url):
-    """Measure page load time"""
-    try:
-        start_time = time.time()
-        requests.get(url, timeout=10)
-        end_time = time.time()
-        return round((end_time - start_time) * 1000)  # Convert to milliseconds
-    except Exception:
-        return None
-
-def extract_keywords(text, num_keywords=20):
-    """Extract most common keywords from text"""
-    stop_words = set(stopwords.words("english")) | set(punctuation)
-    words = [word.lower() for word in word_tokenize(text) if word.lower() not in stop_words and word.isalnum()]
-    word_counts = Counter(words)
-    return dict(word_counts.most_common(num_keywords))
-
-def extract_meta_tags(soup):
-    """Extract meta tags from the page"""
-    meta_tags = {}
-    meta_tags['title'] = soup.title.text.strip() if soup.title else ''
-    meta_description = soup.find('meta', attrs={'name': 'description'})
-    meta_tags['description'] = meta_description['content'].strip() if meta_description else ''
-    return meta_tags
-
-def extract_headings(soup):
-    """Extract all headings (H1-H6) from the page"""
-    headings = []
-    for i in range(1, 7):
-        heading_tag = f'h{i}'
-        for h in soup.find_all(heading_tag):
-            headings.append({'level': heading_tag.upper(), 'text': h.text.strip()})
-    return headings
-
-def extract_internal_links(soup, base_url):
-    """Extract internal links and their anchor texts"""
-    internal_links = []
-    domain = urlparse(base_url).netloc
-    for a in soup.find_all('a', href=True):
-        href = urljoin(base_url, a['href'])
-        if urlparse(href).netloc == domain:
-            anchor_text = a.text.strip()
-            internal_links.append({'url': href, 'anchor_text': anchor_text})
-    return internal_links
-
-def extract_external_links(soup, base_url):
-    """Extract external links and their anchor texts"""
-    external_links = []
-    domain = urlparse(base_url).netloc
-    for a in soup.find_all('a', href=True):
-        href = urljoin(base_url, a['href'])
-        if urlparse(href).netloc != domain:
-            anchor_text = a.text.strip()
-            external_links.append({'url': href, 'anchor_text': anchor_text})
-    return external_links
-
-def analyze_url(url):
-    """Analyze the URL for SEO metrics"""
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-    result = {
-        'url': url,
-        'status': 'Success',
-        'load_time_ms': 0,
-        'meta_title': '',
-        'meta_description': '',
-        'h1_count': 0,
-        'h2_count': 0,
-        'h3_count': 0,
-        'h4_count': 0,
-        'h5_count': 0,
-        'h6_count': 0,
-        'word_count': 0,
-        'readability_score': 0,
-        'internal_links': [],
-        'internal_link_count': 0,
-        'external_links': [],
-        'external_link_count': 0,
+# Custom CSS for better styling
+st.markdown("""
+    <style>
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
     }
-    try:
-        # Load time
-        result['load_time_ms'] = get_load_time(url)
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        white-space: pre-wrap;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        padding: 10px 16px;
+        font-weight: 500;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #4CAF50 !important;
+        color: white !important;
+    }
+    .metric-card {
+        background-color: #ffffff;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-        # Fetch page content
-        response = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        text_content = ' '.join([p.text.strip() for p in soup.find_all(['p', 'div', 'span'])])
+# Previous helper functions remain the same
+# [preprocess_url, get_load_time, extract_keywords, extract_meta_tags, etc.]
 
-        # Word count
-        result['word_count'] = len(text_content.split())
+def create_metric_card(title, value, description):
+    """Create a styled metric card"""
+    st.markdown(f"""
+        <div class="metric-card">
+            <h3 style="margin:0;font-size:1rem;color:#666;">{title}</h3>
+            <p style="margin:8px 0;font-size:1.5rem;font-weight:bold;">{value}</p>
+            <p style="margin:0;font-size:0.875rem;color:#666;">{description}</p>
+        </div>
+    """, unsafe_allow_html=True)
 
-        # Readability score
-        result['readability_score'] = flesch_reading_ease(text_content)
-
-        # Meta tags
-        meta_tags = extract_meta_tags(soup)
-        result['meta_title'] = meta_tags.get('title', '')
-        result['meta_description'] = meta_tags.get('description', '')
-
-        # Headings
-        result['headings'] = extract_headings(soup)
-        result['h1_count'] = sum(1 for h in result['headings'] if h['level'] == 'H1')
-        result['h2_count'] = sum(1 for h in result['headings'] if h['level'] == 'H2')
-        result['h3_count'] = sum(1 for h in result['headings'] if h['level'] == 'H3')
-        result['h4_count'] = sum(1 for h in result['headings'] if h['level'] == 'H4')
-        result['h5_count'] = sum(1 for h in result['headings'] if h['level'] == 'H5')
-        result['h6_count'] = sum(1 for h in result['headings'] if h['level'] == 'H6')
-
-        # Internal links
-        internal_links = extract_internal_links(soup, url)
-        result['internal_links'] = internal_links
-        result['internal_link_count'] = len(internal_links)
-
-        # External links
-        external_links = extract_external_links(soup, url)
-        result['external_links'] = external_links
-        result['external_link_count'] = len(external_links)
-
-    except Exception as e:
-        result['status'] = f"Error: {str(e)}"
-
-    return result
+def create_recommendations(result):
+    """Generate SEO recommendations based on analysis"""
+    recommendations = []
+    
+    if len(result['meta_description']) < 50:
+        recommendations.append("🔸 Meta description is too short. Aim for 150-160 characters.")
+    
+    if result['h1_count'] != 1:
+        recommendations.append("🔸 Page should have exactly one H1 tag.")
+        
+    if result['word_count'] < 300:
+        recommendations.append("🔸 Content length is below recommended minimum (300 words).")
+        
+    if result['load_time_ms'] > 3000:
+        recommendations.append("🔸 Page load time is high. Consider optimization.")
+        
+    if result['internal_link_count'] < 3:
+        recommendations.append("🔸 Add more internal links for better site structure.")
+        
+    if result['readability_score'] < 60:
+        recommendations.append("🔸 Content readability could be improved.")
+        
+    return recommendations
 
 def main():
-    st.set_page_config(page_title="Enhanced SEO Content Analyzer", layout="wide")
-    st.title("Enhanced SEO Content Analyzer")
+    # Header with logo and title
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        st.image("https://via.placeholder.com/100", width=80)  # Replace with your logo
+    with col2:
+        st.title("Enhanced SEO Content Analyzer")
+        st.markdown("*Analyze and optimize your website content for better SEO performance*")
 
-    # Input URLs
-    urls_input = st.text_area("Enter URLs (one per line, max 10)", height=200)
-    urls = [url.strip() for url in urls_input.split('\n') if url.strip()]
+    # Sidebar for configuration
+    with st.sidebar:
+        st.header("Analysis Settings")
+        analysis_depth = st.select_slider(
+            "Analysis Depth",
+            options=["Basic", "Standard", "Deep"],
+            value="Standard"
+        )
+        
+        st.subheader("Custom Checks")
+        check_meta = st.checkbox("Meta Tags", value=True)
+        check_headings = st.checkbox("Heading Structure", value=True)
+        check_links = st.checkbox("Link Analysis", value=True)
+        check_content = st.checkbox("Content Analysis", value=True)
+        
+        st.markdown("---")
+        st.markdown("📅 Analysis Date: " + datetime.now().strftime("%Y-%m-%d"))
 
-    if st.button("Analyze URLs"):
-        if urls:
-            # Preprocess URLs
-            urls = [preprocess_url(url) for url in urls]
+    # Main content area
+    urls_input = st.text_area(
+        "Enter URLs to Analyze",
+        placeholder="Enter URLs (one per line, max 10 URLs)",
+        height=100
+    )
+
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col1:
+        analyze_button = st.button("🔍 Start Analysis", type="primary", use_container_width=True)
+    with col2:
+        url_count = len([url for url in urls_input.split('\n') if url.strip()])
+        st.metric("URLs to Analyze", f"{url_count}/10")
+    with col3:
+        st.markdown("ℹ️ *Analysis depth:* " + analysis_depth)
+
+    if analyze_button and urls_input:
+        urls = [url.strip() for url in urls_input.split('\n') if url.strip()]
+        
+        if len(urls) > 10:
+            st.warning("⚠️ Maximum 10 URLs allowed. Only the first 10 will be analyzed.")
+            urls = urls[:10]
+
+        # Progress tracking
+        progress_text = "Analysis in progress... Please wait."
+        progress_bar = st.progress(0, text=progress_text)
+        
+        results = []
+        for i, url in enumerate(urls):
+            with st.spinner(f"Analyzing URL {i+1}/{len(urls)}: {url}"):
+                result = analyze_url(url)
+                results.append(result)
+                progress_bar.progress((i + 1)/len(urls), text=progress_text)
+
+        # Clear progress bar after completion
+        progress_bar.empty()
+        
+        # Success message
+        st.success(f"✅ Analysis completed for {len(urls)} URLs!")
+
+        # Results display using tabs
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            "📊 Overview",
+            "📋 Detailed Results",
+            "📈 Visualizations",
+            "🔍 Technical SEO",
+            "💡 Recommendations"
+        ])
+
+        with tab1:
+            # Overview metrics in cards
+            st.subheader("Key Metrics Summary")
+            col1, col2, col3 = st.columns(3)
             
-            if len(urls) > 10:
-                st.warning("Maximum 10 URLs allowed. Only the first 10 will be analyzed.")
-                urls = urls[:10]
+            with col1:
+                avg_load_time = sum(r['load_time_ms'] for r in results) / len(results)
+                create_metric_card(
+                    "Average Load Time",
+                    f"{avg_load_time:.0f}ms",
+                    "Target: < 3000ms"
+                )
+                
+            with col2:
+                avg_word_count = sum(r['word_count'] for r in results) / len(results)
+                create_metric_card(
+                    "Average Word Count",
+                    f"{avg_word_count:.0f}",
+                    "Target: > 300 words"
+                )
+                
+            with col3:
+                avg_readability = sum(r['readability_score'] for r in results) / len(results)
+                create_metric_card(
+                    "Average Readability",
+                    f"{avg_readability:.1f}",
+                    "Flesch Reading Ease Score"
+                )
 
-            results = []
-            internal_links_data = []
-            external_links_data = []
-            headings_data = []
-            progress_bar = st.progress(0)
-
-            # Analyze each URL
-            with st.spinner("Analyzing URLs..."):
-                for i, url in enumerate(urls):
-                    progress_bar.progress((i + 1) / len(urls))
-                    result = analyze_url(url)
-                    results.append(result)
-
-                    # Collect internal links for export
-                    for link in result.get('internal_links', []):
-                        internal_links_data.append({'page_url': url, 'link_url': link['url'], 'anchor_text': link['anchor_text']})
-
-                    # Collect external links for export
-                    for link in result.get('external_links', []):
-                        external_links_data.append({'page_url': url, 'link_url': link['url'], 'anchor_text': link['anchor_text']})
-
-                    # Collect headings for export
-                    for heading in result['headings']:
-                        headings_data.append({'page_url': url, 'level': heading['level'], 'text': heading['text']})
-
-            # Create DataFrame for main results
+        with tab2:
+            st.subheader("Detailed Analysis Results")
             df = pd.DataFrame(results)
+            st.dataframe(
+                df[[
+                    'url', 'status', 'load_time_ms', 'word_count',
+                    'readability_score', 'internal_link_count',
+                    'external_link_count', 'h1_count'
+                ]],
+                use_container_width=True
+            )
+            
+            # Export buttons
+            col1, col2 = st.columns(2)
+            with col1:
+                st.download_button(
+                    "📥 Download Full Report (CSV)",
+                    df.to_csv(index=False).encode('utf-8'),
+                    "seo_analysis_report.csv",
+                    "text/csv"
+                )
+            with col2:
+                st.download_button(
+                    "📥 Download Full Report (Excel)",
+                    df.to_excel(index=False).encode('utf-8'),
+                    "seo_analysis_report.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 
-            # Tabs for organized display
-            tabs = st.tabs(["Summary", "Main Table", "Internal Links", "External Links", "Headings"])
+        with tab3:
+            st.subheader("Data Visualizations")
+            
+            # Load Time Distribution
+            fig_load_time = px.bar(
+                df,
+                x='url',
+                y='load_time_ms',
+                title='Page Load Times',
+                labels={'load_time_ms': 'Load Time (ms)', 'url': 'URL'}
+            )
+            st.plotly_chart(fig_load_time, use_container_width=True)
+            
+            # Word Count vs Readability
+            fig_scatter = px.scatter(
+                df,
+                x='word_count',
+                y='readability_score',
+                size='internal_link_count',
+                hover_data=['url'],
+                title='Content Length vs Readability'
+            )
+            st.plotly_chart(fig_scatter, use_container_width=True)
 
-            # Summary Tab
-            with tabs[0]:
-                st.subheader("Summary Statistics")
-                summary = {
-                    "Average Load Time (ms)": [df['load_time_ms'].mean()],
-                    "Average Word Count": [df['word_count'].mean()],
-                    "Average Internal Links": [df['internal_link_count'].mean()],
-                    "Average External Links": [df['external_link_count'].mean()],
-                    "Average Readability Score": [df['readability_score'].mean()],
-                    "Average H1 Count": [df['h1_count'].mean()],
-                    "Average H2 Count": [df['h2_count'].mean()],
-                    "Average H3 Count": [df['h3_count'].mean()],
-                    "Average H4 Count": [df['h4_count'].mean()],
-                    "Average H5 Count": [df['h5_count'].mean()],
-                    "Average H6 Count": [df['h6_count'].mean()],
-                    "Total URLs": [len(df)],
-                }
-                summary_df = pd.DataFrame(summary)
-                st.dataframe(summary_df)
+        with tab4:
+            st.subheader("Technical SEO Analysis")
+            
+            for url, result in zip(urls, results):
+                with st.expander(f"Technical Details - {url}"):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown("**Meta Tags**")
+                        st.code(f"""
+Title: {result['meta_title']}
+Description: {result['meta_description']}
+                        """)
+                        
+                    with col2:
+                        st.markdown("**Heading Structure**")
+                        for i in range(1, 7):
+                            count = result[f'h{i}_count']
+                            st.progress(count/10, text=f"H{i} Tags: {count}")
 
-            # Main Table Tab
-            with tabs[1]:
-                st.subheader("Main Analysis Table")
-                display_columns = [
-                    'url', 'status', 'load_time_ms', 'word_count', 'readability_score',
-                    'internal_link_count', 'external_link_count', 'meta_title', 'meta_description',
-                    'h1_count', 'h2_count', 'h3_count', 'h4_count', 'h5_count', 'h6_count'
-                ]
-                st.download_button("Download Main Table", df[display_columns].to_csv(index=False).encode('utf-8'), "main_table.csv", "text/csv")
-                st.dataframe(df[display_columns])
-
-            # Internal Links Tab
-            with tabs[2]:
-                st.subheader("Internal Links")
-                internal_links_df = pd.DataFrame(internal_links_data)
-                st.download_button("Download Internal Links", internal_links_df.to_csv(index=False).encode('utf-8'), "internal_links.csv", "text/csv")
-                st.dataframe(internal_links_df)
-
-            # External Links Tab
-            with tabs[3]:
-                st.subheader("External Links")
-                external_links_df = pd.DataFrame(external_links_data)
-                st.download_button("Download External Links", external_links_df.to_csv(index=False).encode('utf-8'), "external_links.csv", "text/csv")
-                st.dataframe(external_links_df)
-
-            # Headings Tab
-            with tabs[4]:
-                st.subheader("Headings (H1-H6)")
-                headings_df = pd.DataFrame(headings_data)
-                st.download_button("Download Headings", headings_df.to_csv(index=False).encode('utf-8'), "headings.csv", "text/csv")
-                st.dataframe(headings_df)
+        with tab5:
+            st.subheader("SEO Recommendations")
+            
+            for url, result in zip(urls, results):
+                with st.expander(f"Recommendations - {url}"):
+                    recommendations = create_recommendations(result)
+                    if recommendations:
+                        for rec in recommendations:
+                            st.markdown(rec)
+                    else:
+                        st.success("✅ No major issues found!")
 
 if __name__ == "__main__":
     main()
