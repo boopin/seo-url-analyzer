@@ -61,6 +61,17 @@ def extract_headings(soup):
             headings.append({'level': heading_tag.upper(), 'text': h.text.strip()})
     return headings
 
+def extract_internal_links(soup, base_url):
+    """Extract internal links and their anchor texts"""
+    internal_links = []
+    domain = urlparse(base_url).netloc
+    for a in soup.find_all('a', href=True):
+        href = urljoin(base_url, a['href'])
+        if urlparse(href).netloc == domain:  # Check if it's an internal link
+            anchor_text = a.text.strip()
+            internal_links.append({'url': href, 'anchor_text': anchor_text})
+    return internal_links
+
 def analyze_url(url):
     """Analyze the URL for SEO metrics"""
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
@@ -73,9 +84,13 @@ def analyze_url(url):
         'h1_count': 0,
         'h2_count': 0,
         'h3_count': 0,
+        'h4_count': 0,
+        'h5_count': 0,
+        'h6_count': 0,
         'readability_score': 0,
         'keywords': {},
-        'headings': []
+        'headings': [],
+        'internal_links': []
     }
     try:
         # Load time
@@ -94,9 +109,11 @@ def analyze_url(url):
         # Headings
         headings = extract_headings(soup)
         result['headings'] = headings
-        result['h1_count'] = sum(1 for h in headings if h['level'] == 'H1')
-        result['h2_count'] = sum(1 for h in headings if h['level'] == 'H2')
-        result['h3_count'] = sum(1 for h in headings if h['level'] == 'H3')
+        for i in range(1, 7):
+            result[f'h{i}_count'] = sum(1 for h in headings if h['level'] == f'H{i}')
+
+        # Internal links
+        result['internal_links'] = extract_internal_links(soup, url)
 
         # Readability
         result['readability_score'] = flesch_reading_ease(text_content)
@@ -125,6 +142,7 @@ def main():
 
             results = []
             headings_data = []
+            internal_links_data = []
             progress_bar = st.progress(0)
 
             # Analyze each URL
@@ -137,9 +155,13 @@ def main():
                 for heading in result['headings']:
                     headings_data.append({'url': url, 'level': heading['level'], 'text': heading['text']})
 
+                # Collect internal links
+                for link in result['internal_links']:
+                    internal_links_data.append({'url': url, 'internal_url': link['url'], 'anchor_text': link['anchor_text']})
+
             # Display results
             df = pd.DataFrame(results)
-            st.dataframe(df[['url', 'status', 'load_time_ms', 'meta_title', 'meta_description', 'h1_count', 'h2_count', 'h3_count', 'readability_score']])
+            st.dataframe(df[['url', 'status', 'load_time_ms', 'meta_title', 'meta_description', 'h1_count', 'h2_count', 'h3_count', 'h4_count', 'h5_count', 'h6_count', 'readability_score']])
 
             # Export results
             st.subheader("Export Results")
@@ -150,6 +172,11 @@ def main():
             headings_df = pd.DataFrame(headings_data)
             headings_csv = headings_df.to_csv(index=False).encode('utf-8')
             st.download_button("Download Headings", headings_csv, "headings_analysis.csv", "text/csv")
+
+            # Export internal links
+            internal_links_df = pd.DataFrame(internal_links_data)
+            internal_links_csv = internal_links_df.to_csv(index=False).encode('utf-8')
+            st.download_button("Download Internal Links", internal_links_csv, "internal_links.csv", "text/csv")
 
 if __name__ == "__main__":
     main()
