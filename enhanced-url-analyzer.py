@@ -1,8 +1,8 @@
 """
 Enhanced SEO Content Analyzer
-Version: 1.6
+Version: 1.7
 Updated: January 2025
-Description: Analyze webpages for SEO metrics, including meta tags, headings, internal/external links, and performance statistics.
+Description: Analyze webpages for SEO metrics, including meta tags, headings (H1-H6), internal/external links, and performance statistics.
 """
 
 import streamlit as st
@@ -114,6 +114,9 @@ def analyze_url(url):
         'h1_count': 0,
         'h2_count': 0,
         'h3_count': 0,
+        'h4_count': 0,
+        'h5_count': 0,
+        'h6_count': 0,
         'word_count': 0,
         'readability_score': 0,
         'internal_link_count': 0,
@@ -144,6 +147,9 @@ def analyze_url(url):
         result['h1_count'] = sum(1 for h in headings if h['level'] == 'H1')
         result['h2_count'] = sum(1 for h in headings if h['level'] == 'H2')
         result['h3_count'] = sum(1 for h in headings if h['level'] == 'H3')
+        result['h4_count'] = sum(1 for h in headings if h['level'] == 'H4')
+        result['h5_count'] = sum(1 for h in headings if h['level'] == 'H5')
+        result['h6_count'] = sum(1 for h in headings if h['level'] == 'H6')
 
         # Internal links
         internal_links = extract_internal_links(soup, url)
@@ -172,7 +178,7 @@ def analyze_url(url):
 def main():
     st.set_page_config(page_title="Enhanced SEO Content Analyzer", layout="wide")
     st.title("Enhanced SEO Content Analyzer")
-    st.subheader("Analyze webpages for SEO performance, meta tags, headings, and more.")
+    st.subheader("Analyze webpages for SEO performance, meta tags, headings (H1-H6), and link details.")
 
     # Input URLs
     urls_input = st.text_area("Enter URLs (one per line, max 10)", height=200)
@@ -185,6 +191,9 @@ def main():
                 urls = urls[:10]
 
             results = []
+            internal_links_data = []
+            external_links_data = []
+            headings_data = []
             progress_bar = st.progress(0)
 
             # Analyze each URL
@@ -193,13 +202,25 @@ def main():
                 result = analyze_url(url)
                 results.append(result)
 
+                # Collect internal links for export
+                for link in result.get('internal_links', []):
+                    internal_links_data.append({'page_url': url, 'link_url': link['url'], 'anchor_text': link['anchor_text']})
+
+                # Collect external links for export
+                for link in result.get('external_links', []):
+                    external_links_data.append({'page_url': url, 'link_url': link['url'], 'anchor_text': link['anchor_text']})
+
+                # Collect headings for export
+                for heading in result.get('headings', []):
+                    headings_data.append({'page_url': url, 'level': heading['level'], 'text': heading['text']})
+
             # Create DataFrame for main results
             df = pd.DataFrame(results)
 
             # Main display table
             st.subheader("Main Analysis Table")
             st.dataframe(df[['url', 'status', 'load_time_ms', 'meta_title', 'meta_description',
-                             'word_count', 'h1_count', 'h2_count', 'h3_count',
+                             'word_count', 'h1_count', 'h2_count', 'h3_count', 'h4_count', 'h5_count', 'h6_count',
                              'internal_link_count', 'external_link_count', 'readability_score']])
 
             # Summary table
@@ -209,11 +230,29 @@ def main():
                 "Average Word Count": [df['word_count'].mean()],
                 "Average Internal Links": [df['internal_link_count'].mean()],
                 "Average External Links": [df['external_link_count'].mean()],
-                "Average Headings (H1-H3)": [(df['h1_count'] + df['h2_count'] + df['h3_count']).mean()],
+                "Average Headings (H1-H6)": [(df['h1_count'] + df['h2_count'] + df['h3_count'] + df['h4_count'] + df['h5_count'] + df['h6_count']).mean()],
                 "Average Readability Score": [df['readability_score'].mean()]
             }
             summary_df = pd.DataFrame(summary)
             st.dataframe(summary_df)
+
+            # Internal links table
+            st.subheader("Internal Links")
+            internal_links_df = pd.DataFrame(internal_links_data)
+            st.dataframe(internal_links_df)
+            st.download_button("Download Internal Links", internal_links_df.to_csv(index=False).encode('utf-8'), "internal_links.csv", "text/csv")
+
+            # External links table
+            st.subheader("External Links")
+            external_links_df = pd.DataFrame(external_links_data)
+            st.dataframe(external_links_df)
+            st.download_button("Download External Links", external_links_df.to_csv(index=False).encode('utf-8'), "external_links.csv", "text/csv")
+
+            # Headings table
+            st.subheader("Headings (H1-H6)")
+            headings_df = pd.DataFrame(headings_data)
+            st.dataframe(headings_df)
+            st.download_button("Download Headings", headings_df.to_csv(index=False).encode('utf-8'), "headings.csv", "text/csv")
 
 if __name__ == "__main__":
     main()
