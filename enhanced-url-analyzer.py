@@ -1,8 +1,8 @@
 """
 Enhanced SEO Content Analyzer
-Version: 1.8
+Version: 2.5
 Updated: January 2025
-Description: Analyze webpages for SEO metrics, including meta tags, headings (H1-H6), internal/external links, and performance statistics.
+Description: Analyze webpages for SEO metrics, including meta tags, headings (H1-H6), links, and readability scores.
 """
 
 import streamlit as st
@@ -33,6 +33,12 @@ try:
     nltk.data.find("corpora/stopwords")
 except LookupError:
     nltk.download("stopwords", download_dir=nltk_data_path)
+
+def preprocess_url(url):
+    """Ensure the URL has a valid scheme (http or https)"""
+    if not url.startswith(('http://', 'https://')):
+        return f'https://{url}'
+    return url
 
 def get_load_time(url):
     """Measure page load time"""
@@ -77,7 +83,6 @@ def extract_internal_links(soup, base_url):
         if urlparse(href).netloc == domain:
             anchor_text = a.text.strip()
             internal_links.append({'url': href, 'anchor_text': anchor_text})
-    print(f"Extracted internal links for {base_url}: {internal_links}")  # Debugging
     return internal_links
 
 def extract_external_links(soup, base_url):
@@ -89,20 +94,7 @@ def extract_external_links(soup, base_url):
         if urlparse(href).netloc != domain:
             anchor_text = a.text.strip()
             external_links.append({'url': href, 'anchor_text': anchor_text})
-    print(f"Extracted external links for {base_url}: {external_links}")  # Debugging
     return external_links
-
-def analyze_images(soup):
-    """Analyze all images on the page"""
-    images = soup.find_all('img')
-    total_images = len(images)
-    missing_alt = sum(1 for img in images if not img.get('alt'))
-    return total_images, missing_alt
-
-def check_mobile_friendly(soup):
-    """Check if the page is mobile-friendly"""
-    viewport = soup.find('meta', attrs={'name': 'viewport'})
-    return bool(viewport)
 
 def analyze_url(url):
     """Analyze the URL for SEO metrics"""
@@ -125,9 +117,6 @@ def analyze_url(url):
         'internal_link_count': 0,
         'external_links': [],
         'external_link_count': 0,
-        'total_images': 0,
-        'missing_alt_count': 0,
-        'mobile_friendly': False
     }
     try:
         # Load time
@@ -141,20 +130,22 @@ def analyze_url(url):
         # Word count
         result['word_count'] = len(text_content.split())
 
+        # Readability score
+        result['readability_score'] = flesch_reading_ease(text_content)
+
         # Meta tags
         meta_tags = extract_meta_tags(soup)
         result['meta_title'] = meta_tags.get('title', '')
         result['meta_description'] = meta_tags.get('description', '')
 
         # Headings
-        headings = extract_headings(soup)
-        result['headings'] = headings
-        result['h1_count'] = sum(1 for h in headings if h['level'] == 'H1')
-        result['h2_count'] = sum(1 for h in headings if h['level'] == 'H2')
-        result['h3_count'] = sum(1 for h in headings if h['level'] == 'H3')
-        result['h4_count'] = sum(1 for h in headings if h['level'] == 'H4')
-        result['h5_count'] = sum(1 for h in headings if h['level'] == 'H5')
-        result['h6_count'] = sum(1 for h in headings if h['level'] == 'H6')
+        result['headings'] = extract_headings(soup)
+        result['h1_count'] = sum(1 for h in result['headings'] if h['level'] == 'H1')
+        result['h2_count'] = sum(1 for h in result['headings'] if h['level'] == 'H2')
+        result['h3_count'] = sum(1 for h in result['headings'] if h['level'] == 'H3')
+        result['h4_count'] = sum(1 for h in result['headings'] if h['level'] == 'H4')
+        result['h5_count'] = sum(1 for h in result['headings'] if h['level'] == 'H5')
+        result['h6_count'] = sum(1 for h in result['headings'] if h['level'] == 'H6')
 
         # Internal links
         internal_links = extract_internal_links(soup, url)
@@ -166,17 +157,6 @@ def analyze_url(url):
         result['external_links'] = external_links
         result['external_link_count'] = len(external_links)
 
-        # Images
-        total_images, missing_alt = analyze_images(soup)
-        result['total_images'] = total_images
-        result['missing_alt_count'] = missing_alt
-
-        # Mobile-friendliness
-        result['mobile_friendly'] = check_mobile_friendly(soup)
-
-        # Readability
-        result['readability_score'] = flesch_reading_ease(text_content)
-
     except Exception as e:
         result['status'] = f"Error: {str(e)}"
 
@@ -185,7 +165,6 @@ def analyze_url(url):
 def main():
     st.set_page_config(page_title="Enhanced SEO Content Analyzer", layout="wide")
     st.title("Enhanced SEO Content Analyzer")
-    st.subheader("Analyze webpages for SEO performance, meta tags, headings (H1-H6), and link details.")
 
     # Input URLs
     urls_input = st.text_area("Enter URLs (one per line, max 10)", height=200)
@@ -193,6 +172,9 @@ def main():
 
     if st.button("Analyze URLs"):
         if urls:
+            # Preprocess URLs
+            urls = [preprocess_url(url) for url in urls]
+            
             if len(urls) > 10:
                 st.warning("Maximum 10 URLs allowed. Only the first 10 will be analyzed.")
                 urls = urls[:10]
@@ -204,62 +186,81 @@ def main():
             progress_bar = st.progress(0)
 
             # Analyze each URL
-            for i, url in enumerate(urls):
-                progress_bar.progress((i + 1) / len(urls))
-                result = analyze_url(url)
-                results.append(result)
+            with st.spinner("Analyzing URLs..."):
+                for i, url in enumerate(urls):
+                    progress_bar.progress((i + 1) / len(urls))
+                    result = analyze_url(url)
+                    results.append(result)
 
-                # Collect internal links for export
-                for link in result.get('internal_links', []):
-                    internal_links_data.append({'page_url': url, 'link_url': link['url'], 'anchor_text': link['anchor_text']})
+                    # Collect internal links for export
+                    for link in result.get('internal_links', []):
+                        internal_links_data.append({'page_url': url, 'link_url': link['url'], 'anchor_text': link['anchor_text']})
 
-                # Collect external links for export
-                for link in result.get('external_links', []):
-                    external_links_data.append({'page_url': url, 'link_url': link['url'], 'anchor_text': link['anchor_text']})
+                    # Collect external links for export
+                    for link in result.get('external_links', []):
+                        external_links_data.append({'page_url': url, 'link_url': link['url'], 'anchor_text': link['anchor_text']})
 
-                # Collect headings for export
-                for heading in result.get('headings', []):
-                    headings_data.append({'page_url': url, 'level': heading['level'], 'text': heading['text']})
+                    # Collect headings for export
+                    for heading in result['headings']:
+                        headings_data.append({'page_url': url, 'level': heading['level'], 'text': heading['text']})
 
             # Create DataFrame for main results
             df = pd.DataFrame(results)
 
-            # Main display table
-            st.subheader("Main Analysis Table")
-            st.dataframe(df[['url', 'status', 'load_time_ms', 'meta_title', 'meta_description',
-                             'word_count', 'h1_count', 'h2_count', 'h3_count', 'h4_count', 'h5_count', 'h6_count',
-                             'internal_link_count', 'external_link_count', 'readability_score']])
+            # Tabs for organized display
+            tabs = st.tabs(["Summary", "Main Table", "Internal Links", "External Links", "Headings"])
 
-            # Summary table
-            st.subheader("Summary Statistics")
-            summary = {
-                "Average Load Time (ms)": [df['load_time_ms'].mean()],
-                "Average Word Count": [df['word_count'].mean()],
-                "Average Internal Links": [df['internal_link_count'].mean()],
-                "Average External Links": [df['external_link_count'].mean()],
-                "Average Headings (H1-H6)": [(df['h1_count'] + df['h2_count'] + df['h3_count'] + df['h4_count'] + df['h5_count'] + df['h6_count']).mean()],
-                "Average Readability Score": [df['readability_score'].mean()]
-            }
-            summary_df = pd.DataFrame(summary)
-            st.dataframe(summary_df)
+            # Summary Tab
+            with tabs[0]:
+                st.subheader("Summary Statistics")
+                summary = {
+                    "Average Load Time (ms)": [df['load_time_ms'].mean()],
+                    "Average Word Count": [df['word_count'].mean()],
+                    "Average Internal Links": [df['internal_link_count'].mean()],
+                    "Average External Links": [df['external_link_count'].mean()],
+                    "Average Readability Score": [df['readability_score'].mean()],
+                    "Average H1 Count": [df['h1_count'].mean()],
+                    "Average H2 Count": [df['h2_count'].mean()],
+                    "Average H3 Count": [df['h3_count'].mean()],
+                    "Average H4 Count": [df['h4_count'].mean()],
+                    "Average H5 Count": [df['h5_count'].mean()],
+                    "Average H6 Count": [df['h6_count'].mean()],
+                    "Total URLs": [len(df)],
+                }
+                summary_df = pd.DataFrame(summary)
+                st.dataframe(summary_df)
 
-            # Internal links table
-            st.subheader("Internal Links")
-            internal_links_df = pd.DataFrame(internal_links_data)
-            st.dataframe(internal_links_df)
-            st.download_button("Download Internal Links", internal_links_df.to_csv(index=False).encode('utf-8'), "internal_links.csv", "text/csv")
+            # Main Table Tab
+            with tabs[1]:
+                st.subheader("Main Analysis Table")
+                display_columns = [
+                    'url', 'status', 'load_time_ms', 'word_count', 'readability_score',
+                    'internal_link_count', 'external_link_count', 'meta_title', 'meta_description',
+                    'h1_count', 'h2_count', 'h3_count', 'h4_count', 'h5_count', 'h6_count'
+                ]
+                st.download_button("Download Main Table", df[display_columns].to_csv(index=False).encode('utf-8'), "main_table.csv", "text/csv")
+                st.dataframe(df[display_columns])
 
-           # External links table
-            st.subheader("External Links")
-            external_links_df = pd.DataFrame(external_links_data)
-            st.dataframe(external_links_df)
-            st.download_button("Download External Links", external_links_df.to_csv(index=False).encode('utf-8'), "external_links.csv", "text/csv")
+            # Internal Links Tab
+            with tabs[2]:
+                st.subheader("Internal Links")
+                internal_links_df = pd.DataFrame(internal_links_data)
+                st.download_button("Download Internal Links", internal_links_df.to_csv(index=False).encode('utf-8'), "internal_links.csv", "text/csv")
+                st.dataframe(internal_links_df)
 
-            # Headings table
-            st.subheader("Headings (H1-H6)")
-            headings_df = pd.DataFrame(headings_data)
-            st.dataframe(headings_df)
-            st.download_button("Download Headings", headings_df.to_csv(index=False).encode('utf-8'), "headings.csv", "text/csv")
+            # External Links Tab
+            with tabs[3]:
+                st.subheader("External Links")
+                external_links_df = pd.DataFrame(external_links_data)
+                st.download_button("Download External Links", external_links_df.to_csv(index=False).encode('utf-8'), "external_links.csv", "text/csv")
+                st.dataframe(external_links_df)
+
+            # Headings Tab
+            with tabs[4]:
+                st.subheader("Headings (H1-H6)")
+                headings_df = pd.DataFrame(headings_data)
+                st.download_button("Download Headings", headings_df.to_csv(index=False).encode('utf-8'), "headings.csv", "text/csv")
+                st.dataframe(headings_df)
 
 if __name__ == "__main__":
     main()
