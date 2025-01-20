@@ -1,6 +1,6 @@
 """
 Enhanced SEO Content Analyzer
-Version: 2.2
+Version: 2.3
 Updated: January 2025
 Description: Analyze webpages for SEO metrics, including meta tags, headings (H1-H6), links, and readability scores.
 """
@@ -234,29 +234,27 @@ def main():
             # Main Table Tab
             with tabs[1]:
                 st.subheader("Main Analysis Table")
-                st.dataframe(df)
                 st.download_button("Download Main Table", df.to_csv(index=False).encode('utf-8'), "main_table.csv", "text/csv")
+                st.dataframe(df)
 
             # Internal Links Tab
             with tabs[2]:
                 st.subheader("Internal Links")
-                internal_links_df = pd.DataFrame(internal_links_data)
-                st.dataframe(internal_links_df)
-                st.download_button("Download Internal Links", internal_links_df.to_csv(index=False).encode('utf-8'), "internal_links.csv", "text/csv")
+                st.download_button("Download Internal Links", pd.DataFrame(internal_links_data).to_csv(index=False).encode('utf-8'), "internal_links.csv", "text/csv")
+                st.dataframe(pd.DataFrame(internal_links_data))
 
             # External Links Tab
             with tabs[3]:
                 st.subheader("External Links")
-                external_links_df = pd.DataFrame(external_links_data)
-                st.dataframe(external_links_df)
-                st.download_button("Download External Links", external_links_df.to_csv(index=False).encode('utf-8'), "external_links.csv", "text/csv")
+                st.download_button("Download External Links", pd.DataFrame(external_links_data).to_csv(index=False).encode('utf-8'), "external_links.csv", "text/csv")
+                st.dataframe(pd.DataFrame(external_links_data))
 
             # Headings Tab
             with tabs[4]:
                 st.subheader("Headings (H1-H6)")
                 headings_df = pd.DataFrame(headings_data)
-                st.dataframe(headings_df)
                 st.download_button("Download Headings", headings_df.to_csv(index=False).encode('utf-8'), "headings.csv", "text/csv")
+                st.dataframe(headings_df)
 
 if __name__ == "__main__":
     main()
