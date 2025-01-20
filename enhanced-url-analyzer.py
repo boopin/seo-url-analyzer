@@ -1,6 +1,6 @@
 """
 Enhanced SEO Content Analyzer
-Version: 2.1
+Version: 2.2
 Updated: January 2025
 Description: Analyze webpages for SEO metrics, including meta tags, headings (H1-H6), links, and readability scores.
 """
@@ -146,13 +146,13 @@ def analyze_url(url):
         result['meta_description'] = meta_tags.get('description', '')
 
         # Headings
-        headings = extract_headings(soup)
-        result['h1_count'] = sum(1 for h in headings if h['level'] == 'H1')
-        result['h2_count'] = sum(1 for h in headings if h['level'] == 'H2')
-        result['h3_count'] = sum(1 for h in headings if h['level'] == 'H3')
-        result['h4_count'] = sum(1 for h in headings if h['level'] == 'H4')
-        result['h5_count'] = sum(1 for h in headings if h['level'] == 'H5')
-        result['h6_count'] = sum(1 for h in headings if h['level'] == 'H6')
+        result['headings'] = extract_headings(soup)
+        result['h1_count'] = sum(1 for h in result['headings'] if h['level'] == 'H1')
+        result['h2_count'] = sum(1 for h in result['headings'] if h['level'] == 'H2')
+        result['h3_count'] = sum(1 for h in result['headings'] if h['level'] == 'H3')
+        result['h4_count'] = sum(1 for h in result['headings'] if h['level'] == 'H4')
+        result['h5_count'] = sum(1 for h in result['headings'] if h['level'] == 'H5')
+        result['h6_count'] = sum(1 for h in result['headings'] if h['level'] == 'H6')
 
         # Internal links
         internal_links = extract_internal_links(soup, url)
@@ -171,21 +171,7 @@ def analyze_url(url):
 
 def main():
     st.set_page_config(page_title="Enhanced SEO Content Analyzer", layout="wide")
-    st.markdown("""
-        <style>
-        .header {
-            font-size: 30px;
-            font-weight: bold;
-            color: #333;
-        }
-        .sub-header {
-            font-size: 18px;
-            color: #555;
-        }
-        </style>
-        <div class="header">Enhanced SEO Content Analyzer</div>
-        <div class="sub-header">Analyze webpages for SEO performance, meta tags, headings (H1-H6), links, and readability scores.</div>
-    """, unsafe_allow_html=True)
+    st.title("Enhanced SEO Content Analyzer")
 
     # Input URLs
     urls_input = st.text_area("Enter URLs (one per line, max 10)", height=200)
@@ -222,7 +208,7 @@ def main():
                         external_links_data.append({'page_url': url, 'link_url': link['url'], 'anchor_text': link['anchor_text']})
 
                     # Collect headings for export
-                    for heading in extract_headings(BeautifulSoup(response.text, 'html.parser')):
+                    for heading in result['headings']:
                         headings_data.append({'page_url': url, 'level': heading['level'], 'text': heading['text']})
 
             # Create DataFrame for main results
