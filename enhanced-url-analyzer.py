@@ -119,8 +119,10 @@ def analyze_url(url):
         'keywords': {},
         'internal_links': [],
         'internal_link_count': 0,
+        'internal_link_display': '',
         'external_links': [],
         'external_link_count': 0,
+        'external_link_display': '',
         'total_images': 0,
         'missing_alt_count': 0,
         'mobile_friendly': False
@@ -215,6 +217,8 @@ def main():
 
             # Create DataFrame for display
             df = pd.DataFrame(results)
+
+            # Ensure all columns exist
             display_columns = [
                 'url', 'status', 'load_time_ms', 'word_count',
                 'internal_link_count', 'internal_link_display',
@@ -222,6 +226,11 @@ def main():
                 'meta_title', 'meta_description', 'h1_count', 'h2_count', 'h3_count',
                 'total_images', 'missing_alt_count', 'mobile_friendly', 'readability_score'
             ]
+            for col in display_columns:
+                if col not in df.columns:
+                    df[col] = '' if 'display' in col or 'title' in col or 'description' in col else 0
+
+            # Display results
             st.dataframe(df[display_columns])
 
             # Export results
@@ -229,15 +238,3 @@ def main():
             csv = df.to_csv(index=False).encode('utf-8')
             st.download_button("Download Main Analysis", csv, "seo_analysis.csv", "text/csv")
 
-            # Export internal links
-            internal_links_df = pd.DataFrame(internal_links_data)
-            internal_links_csv = internal_links_df.to_csv(index=False).encode('utf-8')
-            st.download_button("Download Internal Links", internal_links_csv, "internal_links.csv", "text/csv")
-
-            # Export external links
-            external_links_df = pd.DataFrame(external_links_data)
-            external_links_csv = external_links_df.to_csv(index=False).encode('utf-8')
-            st.download_button("Download External Links", external_links_csv, "external_links.csv", "text/csv")
-
-if __name__ == "__main__":
-    main()
