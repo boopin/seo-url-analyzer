@@ -11,6 +11,8 @@ from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from string import punctuation
 from textstat import flesch_reading_ease
+import plotly.express as px
+import plotly.graph_objects as go
 
 # Pre-download NLTK data and set the path
 nltk_data_path = "./nltk_data"
@@ -133,64 +135,197 @@ def analyze_url(url):
 
     return result
 
-def main():
-    st.set_page_config(page_title="Enhanced SEO Content Analyzer", layout="wide")
-    st.title("Enhanced SEO Content Analyzer")
+def create_readability_gauge(score):
+    """Create a gauge chart for readability score"""
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=score,
+        domain={'x': [0, 1], 'y': [0, 1]},
+        gauge={
+            'axis': {'range': [0, 100]},
+            'bar': {'color': "darkblue"},
+            'steps': [
+                {'range': [0, 30], 'color': "red"},
+                {'range': [30, 60], 'color': "yellow"},
+                {'range': [60, 100], 'color': "green"}
+            ],
+        },
+        title={'text': "Readability Score"}
+    ))
+    fig.update_layout(height=250)
+    return fig
 
-    # Input URLs
-    urls_input = st.text_area("Enter URLs (one per line, max 10)", height=200)
+def create_heading_distribution(df):
+    """Create heading distribution chart"""
+    heading_cols = ['h1_count', 'h2_count', 'h3_count', 'h4_count', 'h5_count', 'h6_count']
+    heading_data = df[heading_cols].mean()
+    fig = px.bar(
+        x=['H1', 'H2', 'H3', 'H4', 'H5', 'H6'],
+        y=heading_data.values,
+        title="Average Heading Distribution",
+        labels={'x': 'Heading Level', 'y': 'Average Count'}
+    )
+    fig.update_traces(marker_color='darkblue')
+    return fig
+
+def main():
+    st.set_page_config(
+        page_title="Enhanced SEO Content Analyzer",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+
+    # Sidebar configuration
+    with st.sidebar:
+        st.title("SEO Analyzer Settings")
+        max_keywords = st.slider("Number of keywords to extract", 5, 50, 20)
+        show_advanced = st.checkbox("Show Advanced Metrics", value=False)
+
+    # Main content
+    st.title("SEO Content Analyzer")
+    st.markdown("""
+    Analyze multiple URLs for SEO metrics including content structure, readability, and internal linking.
+    Enter up to 10 URLs below to begin your analysis.
+    """)
+
+    # URL input section
+    urls_input = st.text_area(
+        "Enter URLs (one per line)",
+        height=150,
+        help="Enter up to 10 URLs, each on a new line"
+    )
     urls = [url.strip() for url in urls_input.split('\n') if url.strip()]
 
-    if st.button("Analyze URLs"):
+    # Analysis button and URL counter
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        analyze_button = st.button("Analyze URLs", use_container_width=True)
+    with col2:
         if urls:
-            if len(urls) > 10:
-                st.warning("Maximum 10 URLs allowed. Only the first 10 will be analyzed.")
-                urls = urls[:10]
+            st.metric("URLs to analyze", len(urls))
 
+    if analyze_button:
+        if not urls:
+            st.error("Please enter at least one URL to analyze")
+            return
+
+        if len(urls) > 10:
+            st.warning("Maximum 10 URLs allowed. Only the first 10 will be analyzed.")
+            urls = urls[:10]
+
+        # Analysis section
+        with st.spinner("Analyzing URLs..."):
             results = []
             headings_data = []
             internal_links_data = []
             progress_bar = st.progress(0)
 
-            # Analyze each URL
             for i, url in enumerate(urls):
                 progress_bar.progress((i + 1) / len(urls))
                 result = analyze_url(url)
                 results.append(result)
-
-                # Collect headings
+                
+                # Collect additional data
                 for heading in result['headings']:
                     headings_data.append({'url': url, 'level': heading['level'], 'text': heading['text']})
-
-                # Collect internal links
                 for link in result['internal_links']:
-                    internal_links_data.append({'url': url, 'internal_url': link['url'], 'anchor_text': link['anchor_text']})
+                    internal_links_data.append({
+                        'url': url,
+                        'internal_url': link['url'],
+                        'anchor_text': link['anchor_text']
+                    })
 
-            # Display results
             df = pd.DataFrame(results)
-            st.dataframe(df[['url', 'status', 'load_time_ms', 'word_count', 'internal_link_count', 'meta_title', 'meta_description', 'h1_count', 'h2_count', 'h3_count', 'h4_count', 'h5_count', 'h6_count', 'readability_score']])
 
-            # Display average word count and internal link count
-            average_word_count = df['word_count'].mean()
-            average_internal_links = df['internal_link_count'].mean()
+        # Results Display
+        st.success("Analysis Complete!")
+
+        # Summary metrics
+        st.subheader("Summary Metrics")
+        metric_cols = st.columns(4)
+        metric_cols[0].metric(
+            "Average Word Count",
+            f"{df['word_count'].mean():.0f}",
+            f"{df['word_count'].std():.0f} σ"
+        )
+        metric_cols[1].metric(
+            "Average Internal Links",
+            f"{df['internal_link_count'].mean():.0f}",
+            f"{df['internal_link_count'].std():.0f} σ"
+        )
+        metric_cols[2].metric(
+            "Average Load Time",
+            f"{df['load_time_ms'].mean():.0f}ms",
+            f"{df['load_time_ms'].std():.0f}ms σ"
+        )
+        metric_cols[3].metric(
+            "Average Readability",
+            f"{df['readability_score'].mean():.1f}",
+            f"{df['readability_score'].std():.1f} σ"
+        )
+
+        # Results tabs
+        tab1, tab2, tab3 = st.tabs(["Metrics", "Content Analysis", "Links Analysis"])
+
+        with tab1:
             col1, col2 = st.columns(2)
-            col1.metric("Average Word Count", f"{average_word_count:.2f}")
-            col2.metric("Average Internal Links", f"{average_internal_links:.2f}")
+            with col1:
+                st.plotly_chart(create_readability_gauge(df['readability_score'].mean()), use_container_width=True)
+            with col2:
+                st.plotly_chart(create_heading_distribution(df), use_container_width=True)
 
-            # Export results
-            st.subheader("Export Results")
+        with tab2:
+            st.subheader("Content Analysis")
+            content_cols = st.columns(2)
+            with content_cols[0]:
+                st.dataframe(
+                    df[['url', 'word_count', 'readability_score', 'meta_title', 'meta_description']],
+                    use_container_width=True
+                )
+            with content_cols[1]:
+                if show_advanced:
+                    st.dataframe(
+                        pd.DataFrame(headings_data),
+                        use_container_width=True
+                    )
+
+        with tab3:
+            st.subheader("Internal Links Analysis")
+            st.dataframe(
+                pd.DataFrame(internal_links_data),
+                use_container_width=True
+            )
+
+        # Export section
+        st.subheader("Export Results")
+        export_cols = st.columns(3)
+        with export_cols[0]:
             csv = df.to_csv(index=False).encode('utf-8')
-            st.download_button("Download Main Analysis", csv, "seo_analysis.csv", "text/csv")
-
-            # Export headings
-            headings_df = pd.DataFrame(headings_data)
-            headings_csv = headings_df.to_csv(index=False).encode('utf-8')
-            st.download_button("Download Headings", headings_csv, "headings_analysis.csv", "text/csv")
-
-            # Export internal links
-            internal_links_df = pd.DataFrame(internal_links_data)
-            internal_links_csv = internal_links_df.to_csv(index=False).encode('utf-8')
-            st.download_button("Download Internal Links", internal_links_csv, "internal_links.csv", "text/csv")
+            st.download_button(
+                "Download Main Analysis",
+                csv,
+                "seo_analysis.csv",
+                "text/csv",
+                use_container_width=True
+            )
+        with export_cols[1]:
+            headings_csv = pd.DataFrame(headings_data).to_csv(index=False).encode('utf-8')
+            st.download_button(
+                "Download Headings",
+                headings_csv,
+                "headings_analysis.csv",
+                "text/csv",
+                use_container_width=True
+            )
+        with export_cols[2]:
+            links_csv = pd.DataFrame(internal_links_data).to_csv(index=False).encode('utf-8')
+            st.download_button(
+                "Download Internal Links",
+                links_csv,
+                "internal_links.csv",
+                "text/csv",
+                use_container_width=True
+            )
 
 if __name__ == "__main__":
     main()
