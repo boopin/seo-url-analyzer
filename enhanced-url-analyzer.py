@@ -1,6 +1,6 @@
 """
 Enhanced SEO Content Analyzer
-Version: 1.2
+Version: 1.3
 Updated: January 2025
 Description: Analyze webpages for SEO metrics like headings, keywords, internal links, external links, content structure, and mobile-friendliness.
 """
@@ -114,9 +114,6 @@ def analyze_url(url):
         'h1_count': 0,
         'h2_count': 0,
         'h3_count': 0,
-        'h4_count': 0,
-        'h5_count': 0,
-        'h6_count': 0,
         'word_count': 0,
         'readability_score': 0,
         'keywords': {},
@@ -153,12 +150,14 @@ def analyze_url(url):
 
         # Internal links
         internal_links = extract_internal_links(soup, url)
-        result['internal_links'] = internal_links
+        result['internal_links'] = [{'url': link['url'], 'anchor': link['anchor_text']} for link in internal_links]
+        result['internal_link_display'] = ', '.join([f"{link['url']} ({link['anchor']})" for link in internal_links])
         result['internal_link_count'] = len(internal_links)
 
         # External links
         external_links = extract_external_links(soup, url)
-        result['external_links'] = external_links
+        result['external_links'] = [{'url': link['url'], 'anchor': link['anchor_text']} for link in external_links]
+        result['external_link_display'] = ', '.join([f"{link['url']} ({link['anchor']})" for link in external_links])
         result['external_link_count'] = len(external_links)
 
         # Images
@@ -196,21 +195,49 @@ def main():
                 urls = urls[:10]
 
             results = []
+            internal_links_data = []
+            external_links_data = []
             progress_bar = st.progress(0)
 
             # Analyze each URL
             for i, url in enumerate(urls):
                 progress_bar.progress((i + 1) / len(urls))
-                results.append(analyze_url(url))
+                result = analyze_url(url)
+                results.append(result)
 
-            # Display results
+                # Collect internal links for export
+                for link in result['internal_links']:
+                    internal_links_data.append({'page_url': url, 'link_url': link['url'], 'anchor_text': link['anchor']})
+
+                # Collect external links for export
+                for link in result['external_links']:
+                    external_links_data.append({'page_url': url, 'link_url': link['url'], 'anchor_text': link['anchor']})
+
+            # Create DataFrame for display
             df = pd.DataFrame(results)
-            st.dataframe(df)
+            display_columns = [
+                'url', 'status', 'load_time_ms', 'word_count',
+                'internal_link_count', 'internal_link_display',
+                'external_link_count', 'external_link_display',
+                'meta_title', 'meta_description', 'h1_count', 'h2_count', 'h3_count',
+                'total_images', 'missing_alt_count', 'mobile_friendly', 'readability_score'
+            ]
+            st.dataframe(df[display_columns])
 
             # Export results
             st.subheader("Export Results")
             csv = df.to_csv(index=False).encode('utf-8')
             st.download_button("Download Main Analysis", csv, "seo_analysis.csv", "text/csv")
+
+            # Export internal links
+            internal_links_df = pd.DataFrame(internal_links_data)
+            internal_links_csv = internal_links_df.to_csv(index=False).encode('utf-8')
+            st.download_button("Download Internal Links", internal_links_csv, "internal_links.csv", "text/csv")
+
+            # Export external links
+            external_links_df = pd.DataFrame(external_links_data)
+            external_links_csv = external_links_df.to_csv(index=False).encode('utf-8')
+            st.download_button("Download External Links", external_links_csv, "external_links.csv", "text/csv")
 
 if __name__ == "__main__":
     main()
