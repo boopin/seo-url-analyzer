@@ -87,10 +87,12 @@ def analyze_url(url):
         'h4_count': 0,
         'h5_count': 0,
         'h6_count': 0,
+        'word_count': 0,
         'readability_score': 0,
         'keywords': {},
         'headings': [],
-        'internal_links': []
+        'internal_links': [],
+        'internal_link_count': 0
     }
     try:
         # Load time
@@ -100,6 +102,9 @@ def analyze_url(url):
         response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
         text_content = ' '.join([p.text.strip() for p in soup.find_all(['p', 'div', 'span'])])
+
+        # Word count
+        result['word_count'] = len(text_content.split())
 
         # Meta tags
         meta_tags = extract_meta_tags(soup)
@@ -113,7 +118,9 @@ def analyze_url(url):
             result[f'h{i}_count'] = sum(1 for h in headings if h['level'] == f'H{i}')
 
         # Internal links
-        result['internal_links'] = extract_internal_links(soup, url)
+        internal_links = extract_internal_links(soup, url)
+        result['internal_links'] = internal_links
+        result['internal_link_count'] = len(internal_links)
 
         # Readability
         result['readability_score'] = flesch_reading_ease(text_content)
@@ -161,7 +168,14 @@ def main():
 
             # Display results
             df = pd.DataFrame(results)
-            st.dataframe(df[['url', 'status', 'load_time_ms', 'meta_title', 'meta_description', 'h1_count', 'h2_count', 'h3_count', 'h4_count', 'h5_count', 'h6_count', 'readability_score']])
+            st.dataframe(df[['url', 'status', 'load_time_ms', 'word_count', 'internal_link_count', 'meta_title', 'meta_description', 'h1_count', 'h2_count', 'h3_count', 'h4_count', 'h5_count', 'h6_count', 'readability_score']])
+
+            # Display average word count and internal link count
+            average_word_count = df['word_count'].mean()
+            average_internal_links = df['internal_link_count'].mean()
+            col1, col2 = st.columns(2)
+            col1.metric("Average Word Count", f"{average_word_count:.2f}")
+            col2.metric("Average Internal Links", f"{average_internal_links:.2f}")
 
             # Export results
             st.subheader("Export Results")
